@@ -5,7 +5,7 @@
  *
  * @package    OpenEMR
  * @link       https://www.open-emr.org
- * @author   Jerry Padget <sjpadgett@gmail.com>
+ * @author   Jerry Padgett <sjpadgett@gmail.com>
  * @copyright  Copyright (c) 2025 Jerry Padgett <sjpadgett@gmail.com>
  * @license    https://github.com/openemr/openemr/blob/master/LICENSE GNU General Public License 3
  */
@@ -120,7 +120,7 @@ class PatientAdvanceDirectiveService
                 'name' => $row['name'],
                 'type' => $docType,
                 'status' => $this->determineDocumentStatus($row),
-                'effective_date' => $row['docdate'] ?: substr($row['date'], 0, 10),
+                'effective_date' => $row['docdate'] ?: substr((string) $row['date'], 0, 10),
                 'location' => $row['url'] ?: 'Electronic Health Record',
                 'mimetype' => $row['mimetype'],
                 'hash' => $row['hash'],

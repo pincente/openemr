@@ -51,7 +51,7 @@ class DocumentService extends BaseService
 
     public function isValidPath($path)
     {
-        $docPathParts = explode("/", $path);
+        $docPathParts = explode("/", (string) $path);
 
         unset($docPathParts[0]);
 
@@ -82,7 +82,7 @@ class DocumentService extends BaseService
 
     public function getLastIdOfPath($path)
     {
-        $docPathParts = explode("/", $path);
+        $docPathParts = explode("/", (string) $path);
         $lastInPath = end($docPathParts);
 
         $sql  = "  SELECT id";
@@ -273,12 +273,12 @@ class DocumentService extends BaseService
             if (is_int($limit) && $limit > 0) {
                 $sql .= " LIMIT " . $limit;
             }
-
+            $username = $this->getSession()?->get('authUser');
             $statementResults =  QueryUtils::sqlStatementThrowException($sql, $sqlBindArray);
             while ($row = sqlFetchArray($statementResults)) {
                 // if the current user cannot access the document we do not allow it be passed back as a reference.
                 $document = new \Document($row['id']);
-                if (!$document->can_access()) {
+                if (!$document->can_access($username)) {
                     continue;
                 }
                 $resultRecord = $this->createResultRecordFromDatabaseResult($row);

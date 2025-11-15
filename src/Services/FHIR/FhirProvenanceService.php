@@ -38,6 +38,7 @@ use OpenEMR\Services\Search\SearchFieldException;
 use OpenEMR\Services\Search\SearchFieldType;
 use OpenEMR\Services\Search\ServiceField;
 use OpenEMR\Services\Search\TokenSearchField;
+use OpenEMR\Services\SessionAwareInterface;
 use OpenEMR\Validators\ProcessingResult;
 use Exception;
 
@@ -232,7 +233,7 @@ class FhirProvenanceService extends FhirServiceBase implements IResourceUSCIGPro
             }
         } catch (SearchFieldException $exception) {
             $systemLogger = new SystemLogger();
-            $systemLogger->error($this::class . "->getAll() exception thrown", ['message' => $exception->getMessage(),
+            $systemLogger->error(static::class . "->getAll() exception thrown", ['message' => $exception->getMessage(),
                 'field' => $exception->getField(), 'trace' => $exception->getTraceAsString()]);
             // put our exception information here
             $fhirSearchResult->setValidationMessages([$exception->getField() => $exception->getMessage()]);
@@ -261,7 +262,7 @@ class FhirProvenanceService extends FhirServiceBase implements IResourceUSCIGPro
                 $this->addAllProvenanceRecordsForService($processingResult, $service, $searchParams, $puuidBind);
             } catch (SearchFieldException $ex) {
                 $systemLogger = new SystemLogger();
-                $systemLogger->error($this::class . "->getAll() exception thrown", ['message' => $ex->getMessage(),
+                $systemLogger->error(static::class . "->getAll() exception thrown", ['message' => $ex->getMessage(),
                     'field' => $ex->getField(), 'trace' => $ex->getTraceAsString()]);
                 // put our exception information here
                 $processingResult->setValidationMessages([$ex->getField() => $ex->getMessage()]);
@@ -269,7 +270,7 @@ class FhirProvenanceService extends FhirServiceBase implements IResourceUSCIGPro
             } catch (Exception $ex) {
                 $systemLogger = new SystemLogger();
                 $processingResult->addInternalError("Failed to process provenance search");
-                $systemLogger->error($this::class . "->getAll() exception thrown", ['message' => $ex->getMessage(),
+                $systemLogger->error(static::class . "->getAll() exception thrown", ['message' => $ex->getMessage(),
                     'trace' => $ex->getTraceAsString()]);
                 return $processingResult;
             }
@@ -277,9 +278,12 @@ class FhirProvenanceService extends FhirServiceBase implements IResourceUSCIGPro
         return $processingResult;
     }
 
-    private function addAllProvenanceRecordsForService(ProcessingResult $processingResult, $service, array $searchParams, $puuidBind = null)
+    private function addAllProvenanceRecordsForService(ProcessingResult $processingResult, IResourceReadableService $service, array $searchParams, $puuidBind = null): void
     {
         $searchParams['_revinclude'] = 'Provenance:target';
+        if ($service instanceof SessionAwareInterface) {
+            $service->setSession($this->getSession());
+        }
         $serviceResult = $service->getAll($searchParams, $puuidBind);
         // now loop through and grab all of our provenance resources
         if ($serviceResult->hasData()) {
@@ -311,6 +315,9 @@ class FhirProvenanceService extends FhirServiceBase implements IResourceUSCIGPro
 
         try {
             $newServiceClass = new $className();
+            if ($newServiceClass instanceof SessionAwareInterface) {
+                $newServiceClass->setSession($this->getSession());
+            }
             if ($newServiceClass instanceof IResourceReadableService) {
                 $searchParams = [
                     '_id' => $innerId
@@ -387,10 +394,10 @@ class FhirProvenanceService extends FhirServiceBase implements IResourceUSCIGPro
     public function splitSurrogateKeyIntoParts($key)
     {
         $delimiter = self::SURROGATE_KEY_SEPARATOR_V2;
-        if (str_contains($key, self::SURROGATE_KEY_SEPARATOR_V1)) {
+        if (str_contains((string) $key, self::SURROGATE_KEY_SEPARATOR_V1)) {
             $delimiter = self::SURROGATE_KEY_SEPARATOR_V1;
         }
-        $parts = explode($delimiter, $key);
+        $parts = explode($delimiter, (string) $key);
         $key = [
             "resource" => $parts[0] ?? ""
             ,"id" => $parts[1] ?? ""
@@ -434,6 +441,9 @@ class FhirProvenanceService extends FhirServiceBase implements IResourceUSCIGPro
             $searchParams['_revinclude'] = 'Provenance:target';
             if ($resource != "Provenance" && isset($servicesByResource[$resource]) && $servicesByResource[$resource] instanceof IResourceReadableService) {
                 $service = $servicesByResource[$resource];
+                if ($service instanceof SessionAwareInterface) {
+                    $service->setSession($this->getSession());
+                }
                 if ($type == ExportJob::EXPORT_OPERATION_GROUP) {
                     // service supports filtering by patients so let's do that
                     if ($service instanceof IPatientCompartmentResourceService) {

@@ -136,14 +136,7 @@ function beginReportDatabase($type, $fields, $report_id = null)
         foreach ($fields as $key => $value) {
             // skip the special tokens
             if (
-                ($key == "type") ||
-                ($key == "data") ||
-                ($key == "progress") ||
-                ($key == "progress_items") ||
-                ($key == "total_items") ||
-                ($key == "date_report") ||
-                ($key == "date_report_complete") ||
-                ($key == "bookmark")
+                in_array($key, ["type", "data", "progress", "progress_items", "total_items", "date_report", "date_report_complete", "bookmark"])
             ) {
                 continue;
             }
@@ -287,7 +280,7 @@ function collectItemizedRuleDisplayTitle($report_id, $itemized_test_id, $numerat
     $dispTitle = "";
     $report_view = collectReportDatabase($report_id);
     $type_report = $report_view['type'];
-    $dataSheet = json_decode($report_view['data'], true);
+    $dataSheet = json_decode((string) $report_view['data'], true);
     $display_group_provider_info = false;
     $group_label = '';
     $group_provider_label = '';
@@ -319,7 +312,7 @@ function collectItemizedRuleDisplayTitle($report_id, $itemized_test_id, $numerat
                 // We have a hit, build on the $dispTitle created above
                 if (isset($row['is_main'])) {
                     $tempCqmAmcString = "";
-                    if (($type_report == "cqm") || ($type_report == "cqm_2011") || ($type_report == "cqm_2014")) {
+                    if (in_array($type_report, ["cqm", "cqm_2011", "cqm_2014"])) {
                         if (!empty($row['cqm_pqri_code'])) {
                             $tempCqmAmcString .= " " . xlt('PQRI') . ":" . text($row['cqm_pqri_code']) . " ";
                         }
@@ -475,7 +468,7 @@ function collectItemizedPatientsCdrReport($report_id, $itemized_test_id, $pass =
  */
 function formatReportData($report_id, &$data, $is_amc, $is_cqm, $type_report, $amc_report_types = [])
 {
-    $dataSheet = json_decode($data, true) ?? [];
+    $dataSheet = json_decode((string) $data, true) ?? [];
     $formatted = [];
     $main_pass_filter = 0;
     foreach ($dataSheet as $row) {
@@ -528,10 +521,10 @@ function formatReportData($report_id, &$data, $is_amc, $is_cqm, $type_report, $a
             $base_link = sprintf(
                 "../main/finder/patient_select.php?from_page=cdr_report&report_id=%d"
                 . "&itemized_test_id=%d&numerator_label=%s&csrf_token_form=%s",
-                urlencode($report_id),
-                urlencode($row['itemized_test_id']),
+                urlencode((string) $report_id),
+                urlencode((string) $row['itemized_test_id']),
                 urlencode($row['numerator_label'] ?? ''),
-                urlencode($csrf_token)
+                urlencode((string) $csrf_token)
             );
 
             // we need the provider & group id here...

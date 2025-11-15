@@ -325,7 +325,7 @@ if ($ret = getBillsBetweendayReport($code_type)) {
                 print "<tr><td colspan=50><hr><span class=bold>" . "     " . text($name["fname"]) . " " . text($name["lname"]) . "</span><br /><br /></td></tr><tr>\n";
                 //==================================
 
-                if ($iter['code_type'] === 'COPAY' || $iter['code_type'] === 'Patient Payment' || $iter['code_type'] === 'Insurance Payment') {
+                if (in_array($iter['code_type'], ['COPAY', 'Patient Payment', 'Insurance Payment'], true)) {
                       print "<td width=40><span class=text><center><b>" . xlt("Units") . "</b></center>";
                       print "</span></td><td width=100><span class=text><center><b>" . xlt("Fee") . "</b></center>" ;
                       print "</span></td><td width=100><span class=text><center><b>" . xlt("Code") . "</b></center>" ;
@@ -353,7 +353,7 @@ if ($ret = getBillsBetweendayReport($code_type)) {
             // get dollar amounts to appear on pat,ins payments and copays
 
             if ($iter['code_type'] != 'payment_info') {
-                if ($iter['code_type'] === 'COPAY' || $iter['code_type'] === 'Patient Payment' || $iter['code_type'] === 'Insurance Payment') {
+                if (in_array($iter['code_type'], ['COPAY', 'Patient Payment', 'Insurance Payment'], true)) {
                        print "<td width=40><span class=text><center>" . "1" . "</center>" ;
 
                       // start fee output
@@ -418,22 +418,22 @@ if ($ret = getBillsBetweendayReport($code_type)) {
                       print  "</span></td><td width=100><span class=text><center>" . text($iter['provider_id']) . "</center>";
                       print  "</span></td><td width=100><span class=text><center>" . text($iter['user']) . "</center>" ;
                       print  "</span></td><td width=100><span class=text>";
-                      print  "</span></td><td width=100><span class=small><center>" . text(date("Y-m-d", strtotime($iter["date"]))) . "</center>";
+                      print  "</span></td><td width=100><span class=small><center>" . text(date("Y-m-d", strtotime((string) $iter["date"]))) . "</center>";
                       print  "</span></td>\n";
                 } else {
-                    if (date("Y-m-d", strtotime($iter['bill_date'])) === '1969-12-31') {
+                    if (date("Y-m-d", strtotime((string) $iter['bill_date'])) === '1969-12-31') {
                         print "<td width=40><span class=text><center>" . text($iter['units']) . "</center>" ;
                         print "</span></td><td width=100><span class=text><center>" . text($iter['fee']) . "</center>";
                         if ($GLOBALS['language_default'] === 'English (Standard)') {
-                            print "</span></td><td width=250><span class=text><center>" . text(ucwords(strtolower(substr($iter['code_text'], 0, 38)))) . "</center>";
+                            print "</span></td><td width=250><span class=text><center>" . text(ucwords(strtolower(substr((string) $iter['code_text'], 0, 38)))) . "</center>";
                         } else {
-                            print "</span></td><td width=250><span class=text><center>" . text(substr($iter['code_text'], 0, 38)) . "</center>";
+                            print "</span></td><td width=250><span class=text><center>" . text(substr((string) $iter['code_text'], 0, 38)) . "</center>";
                         }
 
                         print "</span></td><td width=100><span class=text><center>" . text($iter['provider_id']) . "</center>" ;
                         print "</span></td><td width=100><span class=text><center>" . text($iter['user']) . "</center>" ;
                         print "</span></td><td width=100><span class=text><center>" . xlt("Not Billed") . "</center>";
-                        print "</span></td><td width=100><span class=small><center>" . text(date("Y-m-d", strtotime($iter['date']))) . "</center>";
+                        print "</span></td><td width=100><span class=small><center>" . text(date("Y-m-d", strtotime((string) $iter['date']))) . "</center>";
                         print "</span></td><td width=100><span class=small><center>" . text($iter['encounter']) . "</center>";
                         print "</span></td>\n";
                     } else {
@@ -441,15 +441,15 @@ if ($ret = getBillsBetweendayReport($code_type)) {
                             print "<td width=40><span class=text><center>" . text($iter["units"]) . "</center>";
                             print "</span></td><td width=100><span class=text><center>" . text($iter['fee']) . "</center>";
                             if ($GLOBALS['language_default'] === 'English (Standard)') {
-                                  print "</span></td><td width=250><span class=text><center>" . text(ucwords(strtolower(substr($iter['code_text'], 0, 38)))) . "</center>";
+                                  print "</span></td><td width=250><span class=text><center>" . text(ucwords(strtolower(substr((string) $iter['code_text'], 0, 38)))) . "</center>";
                             } else {
-                                  print "</span></td><td width=250><span class=text><center>" . text(substr($iter['code_text'], 0, 38)) . "</center>";
+                                  print "</span></td><td width=250><span class=text><center>" . text(substr((string) $iter['code_text'], 0, 38)) . "</center>";
                             }
 
                             print "</span></td><td width=100><span class=text><center>" . text($iter['provider_id']) . "</center>";
                             print "</span></td><td width=100><span class=text><center>" . text($iter['user']) . "</center>";
-                            print "</span></td><td width=100><span class=small><center>" . text(date("Y-m-d", strtotime($iter['bill_date']))) . "</center>";
-                            print "</span></td><td width=100><span class=small><center>" . text(date("Y-m-d", strtotime($iter['date']))) . "</center>";
+                            print "</span></td><td width=100><span class=small><center>" . text(date("Y-m-d", strtotime((string) $iter['bill_date']))) . "</center>";
+                            print "</span></td><td width=100><span class=small><center>" . text(date("Y-m-d", strtotime((string) $iter['date']))) . "</center>";
                             print "</span></td><td width=100><span class=small><center>" . text($iter['encounter']) . "</center>";
                             print "</span></td>\n";
                         }
@@ -681,8 +681,8 @@ if ($us19_fee != 0 || $us19_inspay != 0 || $us19_insadj != 0 || $us19_patadj != 
 }
 
 if ($totals_only == 1) {
-    $from_date = oeFormatShortDate(substr($query_part_day, 37, 10));
-    $to_date = oeFormatShortDate(substr($query_part_day, 63, 10));
+    $from_date = oeFormatShortDate(substr((string) $query_part_day, 37, 10));
+    $to_date = oeFormatShortDate(substr((string) $query_part_day, 63, 10));
     print "<br /><br />";
     ?><font size = 5 ><?php echo xlt('Totals for ') . text($from_date) . ' ' . xlt('To{{Range}}') . ' ' . text($to_date) ?></font><?php
 }

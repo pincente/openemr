@@ -2,11 +2,12 @@
 
 namespace OpenEMR\Tests\Services\FHIR;
 
+use Monolog\Level;
+use OpenEMR\Common\Logging\SystemLogger;
 use OpenEMR\FHIR\R4\FHIRDomainResource\FHIRPatient;
 use OpenEMR\Services\FHIR\FhirPatientService;
 use OpenEMR\Services\FHIR\Serialization\FhirPatientSerializer;
 use OpenEMR\Tests\Fixtures\FixtureManager;
-use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\Test;
 
@@ -21,7 +22,6 @@ use PHPUnit\Framework\Attributes\Test;
  *
  */
 
-#[CoversClass(FhirPatientService::class)]
 class FhirPatientServiceMappingTest extends TestCase
 {
     private $fixtureManager;
@@ -47,6 +47,7 @@ class FhirPatientServiceMappingTest extends TestCase
 //        var_dump($this->fhirPatientFixture);
 //        die();
         $this->fhirPatientService = new FhirPatientService();
+        $this->fhirPatientService->setSystemLogger(new SystemLogger(Level::Critical));
     }
 
     /**
@@ -115,9 +116,9 @@ class FhirPatientServiceMappingTest extends TestCase
 
         foreach ($actualTelecoms as $actualTelecom) {
             if (
-                $expectedSystem == $actualTelecom->getSystem()->getValue() &&
-                $expectedUse == $actualTelecom->getUse()->getValue() &&
-                $expectedValue == $actualTelecom->getValue()->getValue()
+                $expectedSystem == $actualTelecom->getSystem() &&
+                $expectedUse == $actualTelecom->getUse() &&
+                $expectedValue == $actualTelecom->getValue()
             ) {
                 $matchFound = true;
                 break;

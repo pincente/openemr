@@ -26,6 +26,7 @@ use Particle\Validator\Exception\InvalidValueException;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\EventDispatcher;
+use Symfony\Component\HttpFoundation\Session\SessionInterface;
 
 require_once(__DIR__  . '/../../custom/code_types.inc.php');
 
@@ -57,6 +58,11 @@ class BaseService implements BaseServiceInterface
     private $eventDispatcher;
 
     /**
+     * @var ?SessionInterface For handling session data in the service
+     */
+    private ?SessionInterface $session = null;
+
+    /**
      * Default constructor.
      * @param string $table Passed in data should be vetted and fully qualified from calling service class. Expect to see some search helpers here as well.
      */
@@ -67,6 +73,16 @@ class BaseService implements BaseServiceInterface
         $this->autoIncrements = self::getAutoIncrements($this->table);
         $this->setLogger(new SystemLogger());
         $this->eventDispatcher = $GLOBALS['kernel']->getEventDispatcher();
+    }
+
+    public function setSession(SessionInterface $session): void
+    {
+        $this->session = $session;
+    }
+
+    public function getSession(): ?SessionInterface
+    {
+        return $this->session;
     }
 
     public function getEventDispatcher(): EventDispatcher
@@ -159,7 +175,7 @@ class BaseService implements BaseServiceInterface
      */
     public function queryFields($map = null, $data = null)
     {
-        $value = $data == null || $data == "*" || $data == "all" ? "*" : implode(", ", $data);
+        $value = in_array($data, [null, "*", "all"]) ? "*" : implode(", ", $data);
         $sql = "SELECT $value from $this->table";
         return $this->selectHelper($sql, $map);
     }
@@ -212,7 +228,7 @@ class BaseService implements BaseServiceInterface
             if (!empty($key)) {
                 $keyset .= ($keyset) ? ", `$key` = ? " : "`$key` = ? ";
                 // for dates which should be saved as null
-                if (empty($value) && (str_contains($key, 'date'))) {
+                if (empty($value) && (str_contains((string) $key, 'date'))) {
                     $bind[] = null;
                 } else {
                     $bind[] = ($value === null || $value === false) ? $null_value : $value;
@@ -273,14 +289,14 @@ class BaseService implements BaseServiceInterface
                     $value === null
                     || $value === false
                 )
-                && (!str_contains($key, 'date'))
+                && (!str_contains((string) $key, 'date'))
             ) {
                 // in case unwanted values passed in.
                 continue;
             }
             if (!empty($key)) {
                 $keyset .= ($keyset) ? ", `$key` = ? " : "`$key` = ? ";
-                $bind[] = empty($value) && str_contains($key, 'date') ? null : $value;
+                $bind[] = empty($value) && str_contains((string) $key, 'date') ? null : $value;
             }
         }
 
@@ -345,7 +361,7 @@ class BaseService implements BaseServiceInterface
      */
     public static function isValidDate($dateString)
     {
-        return (bool) strtotime($dateString);
+        return (bool) strtotime((string) $dateString);
     }
 
     /**

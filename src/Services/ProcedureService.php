@@ -59,7 +59,7 @@ class ProcedureService extends BaseService
      */
     public function getUuidFields(): array
     {
-        return ['order_uuid', 'result_uuid', 'report_uuid', 'lab_uuid', 'puuid', 'euuid', 'provider_uuid', 'specimen_uuid'];
+        return ['order_uuid', 'result_uuid', 'report_uuid', 'lab_uuid', 'puuid', 'euuid', 'provider_uuid', 'specimen_uuid', 'lab_director_uuid'];
     }
 
     /**
@@ -67,7 +67,7 @@ class ProcedureService extends BaseService
      * Search criteria is conveyed by array where key = field/column name, value = field value.
      * If no search criteria is provided, all records are returned.
      *
-     * @param  $search         search array parameters
+     * @param  array<string, ISearchField> $search         search array parameters
      * @param  $isAndCondition specifies if AND condition is used for multiple criteria. Defaults to true.
      * @return ProcessingResult which contains validation messages, internal error messages, and the data
      *                         payload.
@@ -102,9 +102,6 @@ class ProcedureService extends BaseService
         ,porder.performer_type
         ,porder.order_intent
         ,porder.location_id
-        ,porder.specimen_type
-        ,porder.specimen_location
-        ,porder.specimen_volume
         ,porder.specimen_fasting
 
         ,preport.report_date
@@ -121,6 +118,8 @@ class ProcedureService extends BaseService
         ,presult.result_result
         ,presult.result_range
         ,presult.result_abnormal
+        ,presult.result_abnormal_title
+        ,presult.result_abnormal_codes
         ,presult.result_comments
         ,presult.result_status
 
@@ -136,6 +135,8 @@ class ProcedureService extends BaseService
         ,labs.lab_uuid
         ,labs.lab_npi
         ,labs.lab_name
+        ,labs.lab_director_uuid
+        ,labs.lab_director_npi
 
         ,patients.puuid
         ,patients.pid
@@ -182,9 +183,6 @@ class ProcedureService extends BaseService
             ,performer_type
             ,order_intent
             ,location_id
-            ,specimen_type
-            ,specimen_location
-            ,specimen_volume
             ,specimen_fasting
         FROM procedure_order
         WHERE activity = 1
@@ -227,7 +225,10 @@ class ProcedureService extends BaseService
             ,`abnormal` AS result_abnormal
             ,`comments` AS result_comments
             ,`document_id` AS result_document_id
+            ,`lo_abnormal`.`title` AS result_abnormal_title
+            ,`lo_abnormal`.`codes` AS result_abnormal_codes
         FROM `procedure_result`
+        LEFT JOIN list_options lo_abnormal ON lo_abnormal.option_id = `procedure_result`.`abnormal` AND lo_abnormal.list_id = 'proc_res_abnormal'
     ) presult ON presult.procedure_report_id = preport.procedure_report_id
     LEFT JOIN (
         SELECT
@@ -245,11 +246,15 @@ class ProcedureService extends BaseService
     LEFT JOIN (
         SELECT
             ppid AS lab_id
-            ,uuid AS lab_uuid
-            ,npi AS lab_npi
-            ,`name` AS lab_name
-            ,`active` AS lab_active
+            ,procedure_providers.uuid AS lab_uuid
+            ,procedure_providers.npi AS lab_npi
+            ,procedure_providers.`name` AS lab_name
+            ,procedure_providers.`active` AS lab_active
+            ,users.uuid AS lab_director_uuid
+            ,users.npi AS lab_director_npi
         FROM procedure_providers
+        LEFT JOIN users ON users.id = procedure_providers.lab_director
+        WHERE users.npi IS NOT NULL AND users.npi != ''
     ) labs ON labs.lab_id = porder.order_lab_id
     LEFT JOIN (
         SELECT
@@ -309,8 +314,8 @@ class ProcedureService extends BaseService
         $sql .= $whereClause->getFragment();
         $sqlBindArray = $whereClause->getBoundValues();
         $statementResults = QueryUtils::sqlStatementThrowException($sql, $sqlBindArray);
-
         $processingResult = $this->hydrateSearchResultsFromQueryResource($statementResults);
+
         return $processingResult;
     }
 
@@ -361,9 +366,6 @@ class ProcedureService extends BaseService
                     ,'scheduled_end' => $record['scheduled_end'] ?? null
                     ,'performer_type' => $record['performer_type'] ?? null
                     ,'order_intent' => $record['order_intent'] ?? null
-                    ,'specimen_type' => $record['specimen_type'] ?? null
-                    ,'specimen_location' => $record['specimen_location'] ?? null
-                    ,'specimen_volume' => $record['specimen_volume'] ?? null
                     ,'specimen_fasting' => $record['specimen_fasting'] ?? null
                     ,'reports' => []
                 ];
@@ -387,6 +389,8 @@ class ProcedureService extends BaseService
                         ,'uuid' => $record['lab_uuid']
                         , 'name' => $record['lab_name']
                         ,'npi' => $record['lab_npi']
+                        ,'director_uuid' => $record['lab_director_uuid']
+                        ,'director_npi' => $record['lab_director_npi']
                     ];
                 }
 
@@ -452,6 +456,8 @@ class ProcedureService extends BaseService
                         , 'result' => $record['result_result']
                         ,'range' => $record['result_range']
                         ,'abnormal' => $record['result_abnormal']
+                        ,'result_abnormal_title' => $record['result_abnormal_title']
+                        ,'result_abnormal_codes' => $record['result_abnormal_codes']
                         , 'comments' => $record['result_comments']
                         ,'document_id' => $record['doc_id']
                         ,'status' => $record['result_status']
@@ -647,6 +653,7 @@ class ProcedureService extends BaseService
                 ON practitioner.id = porder.provider_id
             LEFT JOIN procedure_providers AS lab
                 ON lab.ppid = porder.lab_id
+            LEFT JOIN
             WHERE porder.activity = 1";
 
         if (!empty($search)) {
@@ -700,7 +707,7 @@ class ProcedureService extends BaseService
             }
 
             // Get all order codes for this order
-            $codesSql = "SELECT 
+            $codesSql = "SELECT
                         procedure_order_seq,
                         procedure_code,
                         procedure_name,
@@ -717,7 +724,7 @@ class ProcedureService extends BaseService
             $row['order_codes'] = $orderCodes;
 
             // Get all reports for this order
-            $reportsSql = "SELECT 
+            $reportsSql = "SELECT
                           procedure_report_id,
                           procedure_order_seq,
                           uuid AS report_uuid,
@@ -732,7 +739,7 @@ class ProcedureService extends BaseService
                 $reportRow['report_uuid'] = UuidRegistry::uuidToString($reportRow['report_uuid']);
 
                 // Get results for this report
-                $resultsSql = "SELECT 
+                $resultsSql = "SELECT
                               uuid AS result_uuid,
                               result_status,
                               result_code,
@@ -827,7 +834,7 @@ class ProcedureService extends BaseService
         }
 
         // Get the main order record
-        $sql = "SELECT 
+        $sql = "SELECT
                 porder.uuid,
                 porder.procedure_order_id,
                 porder.provider_id,
@@ -952,7 +959,7 @@ class ProcedureService extends BaseService
     public function addDiagnosis($data): array
     {
         $diagnosisArray = [];
-        $dataArray = explode(";", $data);
+        $dataArray = explode(";", (string) $data);
         foreach ($dataArray as $diagnosis) {
             $diagnosisSplit = explode(":", $diagnosis);
             array_push($diagnosisArray, $diagnosisSplit);
@@ -961,15 +968,6 @@ class ProcedureService extends BaseService
     }
 
 
-
-    /**
-     *
-     * @package   OpenEMR
-     * @link      http://www.open-emr.org
-     * @author    Jerry Padgett <sjpadgett@gmail.com>
-     * @copyright Copyright (c) 2025 Jerry Padgett <sjpadgett@gmail.com>
-     * @license   https://github.com/openemr/openemr/blob/master/LICENSE GNU General Public License 3
-     */
 
 // Add these methods to the ProcedureService class
 
@@ -981,7 +979,7 @@ class ProcedureService extends BaseService
      */
     public function getOrderCodes($orderId): array
     {
-        $sql = "SELECT 
+        $sql = "SELECT
                 procedure_order_id,
                 procedure_order_id,
                 procedure_order_seq,
@@ -1019,7 +1017,7 @@ class ProcedureService extends BaseService
      */
     public function getSpecimens($orderId, $orderSeq = null): array
     {
-        $sql = "SELECT 
+        $sql = "SELECT
                 procedure_specimen_id,
                 uuid,
                 procedure_order_id,
@@ -1102,7 +1100,7 @@ class ProcedureService extends BaseService
     public function getCompleteOrder($orderId): ?array
     {
         // Get main order
-        $orderSql = "SELECT 
+        $orderSql = "SELECT
                     po.*,
                     p.uuid AS puuid,
                     e.uuid AS euuid,
@@ -1242,21 +1240,21 @@ class ProcedureService extends BaseService
 
         // Delete answers first
         sqlStatement(
-            "DELETE FROM procedure_answers 
+            "DELETE FROM procedure_answers
          WHERE procedure_order_id = ? AND procedure_order_seq = ?",
             [$orderId, $seq]
         );
 
         // Delete specimens
         sqlStatement(
-            "DELETE FROM procedure_specimen 
+            "DELETE FROM procedure_specimen
          WHERE procedure_order_id = ? AND procedure_order_seq = ?",
             [$orderId, $seq]
         );
 
         // Delete the order code
         sqlStatement(
-            "DELETE FROM procedure_order_code 
+            "DELETE FROM procedure_order_code
          WHERE procedure_order_id = ? AND procedure_order_seq = ?",
             [$orderId, $seq]
         );
@@ -1434,7 +1432,7 @@ class ProcedureService extends BaseService
     {
         $uuidBinary = UuidRegistry::uuidToBytes($orderUuid);
 
-        $sql = "SELECT poc.* 
+        $sql = "SELECT poc.*
             FROM procedure_order_code poc
             INNER JOIN procedure_order po ON po.procedure_order_id = poc.procedure_order_id
             WHERE po.uuid = ?
@@ -1461,7 +1459,7 @@ class ProcedureService extends BaseService
     {
         $uuidBinary = UuidRegistry::uuidToBytes($orderUuid);
 
-        $sql = "SELECT ps.* 
+        $sql = "SELECT ps.*
             FROM procedure_specimen ps
             INNER JOIN procedure_order po ON po.procedure_order_id = ps.procedure_order_id
             WHERE po.uuid = ?";

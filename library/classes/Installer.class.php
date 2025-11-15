@@ -563,7 +563,6 @@ class Installer
 
         $hash = password_hash($this->iuserpass, PASSWORD_DEFAULT);
         $escapedHash = $this->escapeSql($hash);
-        /** @phpstan-ignore empty.variable */
         if (empty($hash)) {
             // Something is seriously wrong
             error_log('OpenEMR Error : OpenEMR is not working because unable to create a hash.');
@@ -781,7 +780,7 @@ $config = 1; /////////////
         foreach ($GLOBALS_METADATA as $grparr) {
             foreach ($grparr as $fldid => $fldarr) {
                 [$fldname, $fldtype, $flddef, $flddesc] = $fldarr;
-                if (is_array($fldtype) || !str_starts_with($fldtype, 'm_')) {
+                if (is_array($fldtype) || !str_starts_with((string) $fldtype, 'm_')) {
                     $this->writeGlobal($fldid, $flddef, 0, true);
                 }
             }
@@ -2065,7 +2064,7 @@ SETHLP;
      */
     protected function cryptoGenClassExists(): bool
     {
-        return class_exists('OpenEMR\Common\Crypto\CryptoGen');
+        return class_exists(\OpenEMR\Common\Crypto\CryptoGen::class);
     }
 
     /**

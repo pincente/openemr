@@ -45,7 +45,7 @@ class QueryUtils
         return \escape_sql_column_name($columnName, $tables);
     }
 
-    public static function fetchRecordsNoLog($sqlStatement, $binds)
+    public static function fetchRecordsNoLog($sqlStatement, $binds = [])
     {
         // Below line is to avoid a nasty bug in windows.
         if (empty($binds)) {
@@ -154,7 +154,7 @@ class QueryUtils
      * @throws SqlQueryException Thrown if there is an error in the database executing the statement
      * @return recordset
      */
-    public static function sqlStatementThrowException($statement, $binds, $noLog = false)
+    public static function sqlStatementThrowException($statement, $binds = [], $noLog = false)
     {
         if ($noLog) {
             return \sqlStatementNoLog($statement, $binds, true);
@@ -171,7 +171,7 @@ class QueryUtils
     {
 
         try {
-            if (preg_match("/^[a-zA-Z_]{1}[a-zA-Z0-9_]{1,63}$/", $tableName) === false) {
+            if (preg_match("/^[a-zA-Z_]{1}[a-zA-Z0-9_]{1,63}$/", (string) $tableName) === false) {
                 return false; // don't allow invalid table names
             }
             // escape table name just DIES if the table name is not valid so we need to handle that here
@@ -296,7 +296,7 @@ class QueryUtils
         return \sqlGetLastInsertId();
     }
 
-    public static function querySingleRow(string $sql, array $params)
+    public static function querySingleRow(string $sql, array $params = [])
     {
         $result = self::sqlStatementThrowException($sql, $params);
         return \sqlFetchArray($result);

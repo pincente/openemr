@@ -128,7 +128,7 @@ class HttpRestRequest extends Request implements Stringable
             unset($_GET['_REWRITE_COMMAND']);
 
             // Set up PATH_INFO for Symfony
-            $_SERVER['PATH_INFO'] = '/' . ltrim($rewritePath, '/');
+            $_SERVER['PATH_INFO'] = '/' . ltrim((string) $rewritePath, '/');
 
             // Update REQUEST_URI to reflect the clean path
             $queryString = http_build_query($_GET);
@@ -555,10 +555,10 @@ class HttpRestRequest extends Request implements Stringable
 
     /**
      * Returns the scope context (patient,user,system) that is used for the given resource as parsed from the request scopes
-     * @param $resource string The resource to check (IE Patient, AllergyIntolerance, etc).
+     * @param $resource string|null The resource to check (IE Patient, AllergyIntolerance, etc).
      * @return string|null The context or null if the resource does not exist in the scopes.
      */
-    public function getScopeContextForResource(string $resource): ?string
+    public function getScopeContextForResource(?string $resource): ?string
     {
         return $this->resourceScopeContexts[$resource] ?? null;
     }
@@ -633,7 +633,7 @@ class HttpRestRequest extends Request implements Stringable
     public function isFhirSearchRequest(): bool
     {
         if ($this->isFhir() && $this->getRequestMethod() == "POST") {
-            return str_ends_with($this->getRequestPath(), '_search') !== false;
+            return str_ends_with((string) $this->getRequestPath(), '_search') !== false;
         }
         return false;
     }

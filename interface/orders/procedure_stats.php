@@ -77,10 +77,7 @@ $lres = sqlStatement("SELECT field_id, title, data_type, list_id, description " 
 while ($lrow = sqlFetchArray($lres)) {
     $fid = $lrow['field_id'];
     if (
-        $fid == 'fname'
-        || $fid == 'mname'
-        || $fid == 'lname'
-        || $fid == 'additional_addresses'
+        in_array($fid, ['fname', 'mname', 'lname', 'additional_addresses'])
     ) {
         continue;
     }
@@ -97,8 +94,8 @@ function getAge($dob, $asof = '')
         $asof = date('Y-m-d');
     }
 
-    $a1 = explode('-', substr($dob, 0, 10));
-    $a2 = explode('-', substr($asof, 0, 10));
+    $a1 = explode('-', substr((string) $dob, 0, 10));
+    $a2 = explode('-', substr((string) $asof, 0, 10));
     $age = $a2[0] - $a1[0];
     if ($a2[1] < $a1[1] || ($a2[1] == $a1[1] && $a2[2] < $a1[2])) {
         --$age;
@@ -217,7 +214,7 @@ function loadColumnData(string $key, array $row): void
         $areport[$key]['.neg'] = 0;       // number of negative results
         $areport[$key]['.age'] = [0,0,0,0,0,0,0,0,0]; // age array
         foreach ($arr_show as $askey => $dummy) {
-            if (str_starts_with($askey, '.')) {
+            if (str_starts_with((string) $askey, '.')) {
                 continue;
             }
 
@@ -235,7 +232,7 @@ function loadColumnData(string $key, array $row): void
     }
 
   // Increment the correct sex category.
-    if (strcasecmp($row['sex'], 'Male') == 0) {
+    if (strcasecmp((string) $row['sex'], 'Male') == 0) {
         ++$areport[$key]['.men'];
     } else {
         ++$areport[$key]['.wom'];
@@ -255,7 +252,7 @@ function loadColumnData(string $key, array $row): void
   // attributes.  A key of "Unspecified" is used where the attribute has
   // no assigned value.
     foreach ($arr_show as $askey => $dummy) {
-        if (str_starts_with($askey, '.')) {
+        if (str_starts_with((string) $askey, '.')) {
             continue;
         }
 
@@ -278,7 +275,7 @@ function process_result_code($row): void
         loadColumnData($key, $row);
     } elseif ($form_by === '5') {  // Recommended followup services.
         if (!empty($row['related_code'])) {
-            $relcodes = explode(';', $row['related_code']);
+            $relcodes = explode(';', (string) $row['related_code']);
             foreach ($relcodes as $codestring) {
                 if ($codestring === '') {
                     continue;
@@ -458,14 +455,12 @@ if (!empty($_POST['form_submit'])) {
 
     $pd_fields = '';
     foreach ($arr_show as $askey => $asval) {
-        if (str_starts_with($askey, '.')) {
+        if (str_starts_with((string) $askey, '.')) {
             continue;
         }
 
         if (
-            $askey == 'regdate' || $askey == 'sex' || $askey == 'DOB' ||
-            $askey == 'lname' || $askey == 'fname' || $askey == 'mname' ||
-            $askey == 'contrastart' || $askey == 'referral_source'
+            in_array($askey, ['regdate', 'sex', 'DOB', 'lname', 'fname', 'mname', 'contrastart', 'referral_source'])
         ) {
             continue;
         }

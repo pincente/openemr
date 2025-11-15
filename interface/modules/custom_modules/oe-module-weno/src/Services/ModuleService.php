@@ -74,7 +74,7 @@ class ModuleService
         $flag = false;
         while ($row = sqlFetchArray($us)) {
             $flag = true;
-            $key = substr($row['setting_label'], 7);
+            $key = substr((string) $row['setting_label'], 7);
             $vendors[$key] = $row['setting_value'];
         }
         if (!$flag && !empty($_SESSION['authUserID'] ?? '')) {
@@ -150,7 +150,7 @@ class ModuleService
         $sql = "SELECT $col FROM modules WHERE mod_id = ? OR `mod_directory` = ?";
         $results = sqlQuery($sql, [$modId, $modId]);
         foreach ($results as $k => $v) {
-            $registry[$k] = trim((preg_replace('/\R/', '', $v)));
+            $registry[$k] = trim(((string) preg_replace('/\R/', '', (string) $v)));
         }
 
         return $registry;
@@ -167,10 +167,7 @@ class ModuleService
         foreach ($keys as $key) {
             // these are always required to run module.
             if (
-                $key === 'weno_rx_enable'
-                || $key === 'weno_admin_username'
-                || $key === 'weno_admin_password'
-                || $key === 'weno_encryption_key'
+                in_array($key, ['weno_rx_enable', 'weno_admin_username', 'weno_admin_password', 'weno_encryption_key'], true)
             ) {
                 $value = $config[$key] ?? null;
                 if (empty($value)) {

@@ -30,7 +30,7 @@ if (!(function_exists('xl'))) {
         "lang_definitions.cons_id = lang_constants.cons_id WHERE " .
         "lang_id=? AND constant_name = ? LIMIT 1";
         $res = sqlStatementNoLog($sql, [$lang_id,$constant]);
-        $row = SqlFetchArray($res);
+        $row = sqlFetchArray($res);
         $string = $row['definition'] ?? '';
         if ($string == '') {
             $string = "$constant";
@@ -39,12 +39,12 @@ if (!(function_exists('xl'))) {
         if (!empty($GLOBALS['translate_no_safe_apostrophe'])) {
             $patterns =  ['/\n/','/\r/','/\{\{.*\}\}/'];
             $replace =  [' ','',''];
-            $string = preg_replace($patterns, $replace, $string);
+            $string = preg_replace($patterns, $replace, (string) $string);
         } else {
             // convert apostrophes and quotes to safe apostrophe
             $patterns =  ['/\n/','/\r/','/"/',"/'/",'/\{\{.*\}\}/'];
             $replace =  [' ','','`','`',''];
-            $string = preg_replace($patterns, $replace, $string);
+            $string = preg_replace($patterns, $replace, (string) $string);
         }
 
         $string = "$prepend" . "$string" . "$append";

@@ -23,21 +23,21 @@ require_once("gacl_admin.inc.php");
 //GET takes precedence.
 $object_type = !empty($_GET['object_type']) ? $_GET['object_type'] : $_POST['object_type'];
 
-switch(strtolower(trim($object_type))) {
+switch(strtolower(trim((string) $object_type))) {
     case 'aco':
         $object_type = 'aco';
-	$object_table = $gacl_api->_db_table_prefix . 'aco';
-		$object_sections_table = $gacl_api->_db_table_prefix . 'aco_sections';
+        $object_table = $gacl_api->_db_table_prefix . 'aco';
+        $object_sections_table = $gacl_api->_db_table_prefix . 'aco_sections';
         break;
     case 'aro':
         $object_type = 'aro';
-	$object_table = $gacl_api->_db_table_prefix . 'aro';
-		$object_sections_table = $gacl_api->_db_table_prefix . 'aro_sections';
+        $object_table = $gacl_api->_db_table_prefix . 'aro';
+        $object_sections_table = $gacl_api->_db_table_prefix . 'aro_sections';
         break;
     case 'axo':
         $object_type = 'axo';
-	$object_table = $gacl_api->_db_table_prefix . 'axo';
-		$object_sections_table = $gacl_api->_db_table_prefix . 'axo_sections';
+        $object_table = $gacl_api->_db_table_prefix . 'axo';
+        $object_sections_table = $gacl_api->_db_table_prefix . 'axo_sections';
         break;
     default:
         echo "ERROR: Must select an object type<br />\n";

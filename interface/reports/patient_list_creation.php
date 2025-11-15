@@ -342,7 +342,7 @@ if ($csv) {
                 <?php // Show inputs related to specific search options
                 if (
                     !empty($_POST['srch_option'])
-                    && ($_POST['srch_option'] == "allergs" || $_POST['srch_option'] == "probs" || $_POST['srch_option'] == "meds" || $_POST['srch_option'] == "procs" || $_POST['srch_option'] == "results")
+                    && (in_array($_POST['srch_option'], ["allergs", "probs", "meds", "procs", "results"]))
                 ) { ?>
                     $('#pr_diag').show();
                 <?php }
@@ -655,7 +655,7 @@ if (!empty($_POST['form_refresh'])) {
 
     $sqlstmt .= " from patient_data as pd";
     // JOINs
-    if ($srch_option != "encounts" && $srch_option != "observs" && $srch_option != "prescripts") {
+    if (!in_array($srch_option, ["encounts", "observs", "prescripts"])) {
         $sqlstmt .= " LEFT OUTER JOIN users AS u ON u.id = pd.providerid";
     }
     switch ($srch_option_pointer) {
@@ -756,23 +756,23 @@ if (!empty($_POST['form_refresh'])) {
         $whr_stmt .= " AND pd.pid = ?";
         array_push($sqlBindArray, $patient_id);
     }
-    if (strlen($provider_id) != 0) {
+    if (strlen((string) $provider_id) != 0) {
         $whr_stmt .= " AND u.id = ?";
         array_push($sqlBindArray, $provider_id);
     }
-    if (strlen($age_from) != 0) {
+    if (strlen((string) $age_from) != 0) {
         $whr_stmt .= " AND DATE_FORMAT(FROM_DAYS(DATEDIFF(NOW(),pd.dob)), '%Y')+0 >= ?";
         array_push($sqlBindArray, $age_from);
     }
-    if (strlen($age_to) != 0) {
+    if (strlen((string) $age_to) != 0) {
         $whr_stmt .= " AND DATE_FORMAT(FROM_DAYS(DATEDIFF(NOW(),pd.dob)), '%Y')+0 <= ?";
         array_push($sqlBindArray, $age_to);
     }
-    if (strlen($sql_gender) != 0) {
+    if (strlen((string) $sql_gender) != 0) {
         $whr_stmt .= " AND pd.sex = ?";
         array_push($sqlBindArray, $sql_gender);
     }
-    if (strlen($sql_ethnicity) != 0) {
+    if (strlen((string) $sql_ethnicity) != 0) {
         $whr_stmt .= " AND (pd.ethnicity = ? OR pd.ethnicity LIKE ? OR pd.ethnicity LIKE ?)";
         array_push($sqlBindArray, $sql_ethnicity);
         // catch the item at the beginning of the list
@@ -1015,7 +1015,7 @@ if (!empty($_POST['form_refresh'])) {
                     case "prc_diagnoses":
                         if (!$csv && $report_value != '') {
                             $report_value_print = '<ul style="margin: 0; padding-left: 0.5em;">';
-                            foreach (explode(';', $report_value) as $code) {
+                            foreach (explode(';', (string) $report_value) as $code) {
                                 $report_value_print .= '<li><abbr title="' . attr($code) . '">' . text(getCodeDescription($code)) . '</abbr></li>';
                             }
                             $report_value_print .= '</ul>';

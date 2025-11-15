@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Encounter form for entering procedure orders.
+ * Encounter form for entering procedure orders
  *
  * @package   OpenEMR
  * @link      http://www.open-emr.org
@@ -10,10 +10,12 @@
  * @author    Sherwin Gaddis <sherwingaddis@gmail.com>
  * @author    Jerry Padgett <sjpadgett@gmail.com>
  * @author    Ranganath Pathak <pathak@scrs1.org>
+ * @author    Michael A. Smith <michael@opencoreemr.com>
  * @copyright Copyright (c) 2010-2017 Rod Roark <rod@sunsetsystems.com>
  * @copyright Copyright (c) 2017-2019 Brady Miller <brady.g.miller@gmail.com>
  * @copyright Copyright (c) 2017-2025 Jerry Padgett <sjpadgett@gmail.com>
  * @copyright Copyright (c) 2019 Ranganath Pathak <pathak@scrs1.org>
+ * @copyright Copyright (c) 2025 OpenCoreEMR Inc.
  * @license   https://github.com/openemr/openemr/blob/master/LICENSE GNU General Public License 3
  */
 
@@ -26,6 +28,7 @@ require_once(__DIR__ . "/../../../custom/code_types.inc.php");
 
 use OpenEMR\Common\Csrf\CsrfUtils;
 use OpenEMR\Common\Forms\ReasonStatusCodes;
+use OpenEMR\Common\Orders\Hl7OrderGenerationException;
 use OpenEMR\Common\Uuid\UuidRegistry;
 use OpenEMR\Core\Header;
 use OpenEMR\Events\Services\DornLabEvent;
@@ -116,7 +119,7 @@ function get_lab_name($id): string
 if (!function_exists('ucname')) {
     function ucname($string): string
     {
-        $string = ucwords(strtolower($string));
+        $string = ucwords(strtolower((string) $string));
         foreach (['-', '\''] as $delimiter) {
             if (str_contains($string, $delimiter)) {
                 $string = implode($delimiter, array_map('ucfirst', explode($delimiter, $string)));
@@ -174,8 +177,8 @@ function normalizeDirectoryName(string $input): string
     $normalized = str_replace(' ', '_', $normalized);
     $normalized = str_replace(['&', '+'], 'and', $normalized);
     $normalized = preg_replace('/[^A-Za-z0-9_-]/', '', $normalized);
-    $normalized = preg_replace('/_+/', '_', $normalized);
-    $normalized = trim($normalized, '_-');
+    $normalized = preg_replace('/_+/', '_', (string) $normalized);
+    $normalized = trim((string) $normalized, '_-');
     $normalized = strtolower($normalized);
 
     return $normalized;
@@ -185,7 +188,7 @@ function normalizeDirectoryName(string $input): string
 $formid = (int)($_REQUEST['id'] ?? 0);
 
 $reload_url = $rootdir . '/patient_file/encounter/view_form.php?formname=procedure_order&id=' . urlencode($formid);
-$req_url = $GLOBALS['web_root'] . '/controller.php?document&retrieve&patient_id=' . urlencode($pid) . '&document_id=';
+$req_url = $GLOBALS['web_root'] . '/controller.php?document&retrieve&patient_id=' . urlencode((string) $pid) . '&document_id=';
 $reqStr = "";
 
 // If Save or Transmit was clicked, save the info.
@@ -244,17 +247,17 @@ if (($_POST['bn_save'] ?? null) || !empty($_POST['bn_xmit']) || !empty($_POST['b
         $_POST['form_billing_type'],
         $_POST['form_order_psc'],
         $_POST['form_specimen_fasting'] ?? '',
-        trim($_POST['form_clinical_hx']),
-        trim($_POST['form_patient_instructions']),
+        trim((string) $_POST['form_clinical_hx']),
+        trim((string) $_POST['form_patient_instructions']),
         $pid,
         $encounter,
-        trim($_POST['form_history_order']),
-        trim($_POST['form_order_abn']),
-        trim($_POST['form_order_diagnosis']),
-        trim($_POST['form_account']),
+        trim((string) $_POST['form_history_order']),
+        trim((string) $_POST['form_order_abn']),
+        trim((string) $_POST['form_order_diagnosis']),
+        trim((string) $_POST['form_account']),
         (int)$_POST['form_account_facility'],
         (int)$_POST['form_collector_id'],
-        trim($_POST['procedure_type_names']),
+        trim((string) $_POST['procedure_type_names']),
         // NEW US Core 8.0 fields
         trim($_POST['form_order_intent'] ?? 'order'),
         QuotedOrNull($_POST['form_scheduled_date']),
@@ -359,24 +362,35 @@ if (($_POST['bn_save'] ?? null) || !empty($_POST['bn_xmit']) || !empty($_POST['b
                 $ed->dispatch($event, DornLabEvent::GEN_HL7_ORDER);
                 $alertmsg .= $event->getMessagesAsString('Generate Order:', true);
             } else {
-                if ($gbl_lab === 'ammon' || $gbl_lab === 'clarity') {
-                    require_once(__DIR__ . "/../../procedure_tools/gen_universal_hl7/gen_hl7_order.inc.php");
-                    $alertmsg = gen_hl7_order($formid, $hl7);
-                } elseif ($gbl_lab === 'labcorp') {
-                    error_log("in the labcorp");
-                    require_once(__DIR__ . "/../../procedure_tools/labcorp/ereq_form.php");
-                    require_once(__DIR__ . "/../../procedure_tools/labcorp/gen_hl7_order.inc.php");
-                    $alertmsg = gen_hl7_order($formid, $hl7, $reqStr);
-                } elseif ($gbl_lab === 'quest') {
-                    error_log("in the quest");
-                    require_once(__DIR__ . "/../../procedure_tools/quest/gen_hl7_order.inc.php");
-                    $alertmsg = gen_hl7_order($formid, $hl7, $reqStr);
-                } else {
-                    // Default lab. Add more labs here.
-                    error_log("in the default lab");
-                    require_once(__DIR__ . "/../../procedure_tools/ereqs/ereq_universal_form.php");
-                    require_once(__DIR__ . "/../../orders/gen_hl7_order.inc.php");
-                    $alertmsg = gen_hl7_order($formid, $hl7);
+                // Lab-specific configuration: maps lab identifier to required files
+                $interfaceDir = realpath(dirname(__DIR__, 2));
+                $procToolsDir = $interfaceDir . DIRECTORY_SEPARATOR . 'procedure_tools';
+                $labConfigs = [
+                    'ammon' => ["{$procToolsDir}/gen_universal_hl7/gen_hl7_order.inc.php"],
+                    'clarity' => ["{$procToolsDir}/gen_universal_hl7/gen_hl7_order.inc.php"],
+                    'labcorp' => [
+                        "{$procToolsDir}/labcorp/ereq_form.php",
+                        "{$procToolsDir}/labcorp/gen_hl7_order.inc.php",
+                    ],
+                    'quest' => ["{$procToolsDir}/quest/gen_hl7_order.inc.php"],
+                    'default' => [
+                        "{$procToolsDir}/ereqs/ereq_universal_form.php",
+                        "{$interfaceDir}/orders/gen_hl7_order.inc.php",
+                    ],
+                ];
+                // Load the appropriate implementation files
+                $requiredFiles = $labConfigs[$gbl_lab] ?? $labConfigs['default'];
+                foreach ($requiredFiles as $file) {
+                    require_once($file);
+                }
+
+                try {
+                    // Generate the HL7 order
+                    $result = gen_hl7_order($formid);
+                    $hl7 = $result->hl7;
+                    $reqStr = $result->requisitionData;
+                } catch (Hl7OrderGenerationException $e) {
+                    $alertmsg = $e->getMessage();
                 }
             }
 
@@ -394,7 +408,7 @@ if (($_POST['bn_save'] ?? null) || !empty($_POST['bn_xmit']) || !empty($_POST['b
                             // todo: check if more than one requisition document can be returned
                             $eReqForm = $orderResponse->orders[0]->requisitionDocumentBase64 ?? '';
                             if (!empty($eReqForm)) {
-                                $eReqForm = base64_decode($eReqForm);
+                                $eReqForm = base64_decode((string) $eReqForm);
                                 if (empty($eReqForm)) {
                                     $alertmsg .= "\n" . xlt("Error decoding eReq PDF document.");
                                 } else {
@@ -1259,7 +1273,7 @@ if (!empty($row['lab_id'])) {
 <?php
 $name = $enrow['fname'] . ' ';
 $name .= (!empty($enrow['mname'])) ? $enrow['mname'] . ' ' . $enrow['lname'] : $enrow['lname'];
-$date = xl('on') . ' ' . oeFormatShortDate(substr($enrow['date'], 0, 10));
+$date = xl('on') . ' ' . oeFormatShortDate(substr((string) $enrow['date'], 0, 10));
 $title = [xl('Order for'), $name, $formid ? xl('Order Id') . ' ' . text($formid) : xl('New Order')];
 $reasonCodeStatii = ReasonStatusCodes::getCodesWithDescriptions();
 $reasonCodeStatii[ReasonStatusCodes::NONE]['description'] = xl("Select a status code");
@@ -1298,7 +1312,7 @@ $reasonCodeStatii[ReasonStatusCodes::NONE]['description'] = xl("Select a status 
             );
             $req = [];
             while ($oprow = sqlFetchArray($reqres)) {
-                $doc_type = stripos($oprow['url'], 'ABN') ? 'ABN' : 'REQ';
+                $doc_type = stripos((string) $oprow['url'], 'ABN') ? 'ABN' : 'REQ';
                 if ($gbl_lab === "labcorp") {
                     $doc_type = "eREQ";
                 }
@@ -1586,7 +1600,7 @@ $reasonCodeStatii[ReasonStatusCodes::NONE]['description'] = xl("Select a status 
                                     );
                                     $problem_diags = '';
                                     while ($probrow = sqlFetchArray($diagres)) {
-                                        if (!str_contains($probrow['diagnosis'], 'ICD')) {
+                                        if (!str_contains((string) $probrow['diagnosis'], 'ICD')) {
                                             continue;
                                         }
                                         $problem_diags .= $probrow['diagnosis'] . ';';

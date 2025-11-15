@@ -238,7 +238,7 @@ $check_sum = isset($_GET['check_sum']);
             if (empty($checkSumOld)) {
                 // no checksum, so skip
                 continue;
-            } elseif (strlen($checkSumOld) < 50) {
+            } elseif (strlen((string) $checkSumOld) < 50) {
                 // for backward compatibility (for log checksums created in the sha1 days)
                 $checkSumNew = sha1($iter['date'] . $iter['event'] . $iter['user'] . $iter['groupname'] . $iter['comments'] . $iter['patient_id'] . $iter['success'] . $iter['checksum'] . $iter['crt_user']);
             } else {
@@ -310,20 +310,16 @@ $check_sum = isset($_GET['check_sum']);
                         $trans_comments = xl("Unable to decrypt these comments since the PHP openssl module is not installed.");
                     }
                 } else { //$encryptVersion == 0
-                    // Use old mcrypt method
-                    if (extension_loaded('mcrypt')) {
-                        $trans_comments = preg_replace($patterns, $replace, trim($cryptoGen->aes256Decrypt_mycrypt($iter["comments"])));
-                    } else {
-                        $trans_comments = xl("Unable to decrypt these comments since the PHP mycrypt module is not installed.");
-                    }
+                    // The old mcrypt method is no longer supported
+                    $trans_comments = xl("Unable to decrypt these comments since the PHP mycrypt module is no longer available.");
                 }
             } else {
                 // base64 decode if applicable (note the $encryptVersion is a misnomer here, we have added in base64 encoding
                 //  of comments in OpenEMR 6.0.0 and greater when the comments are not encrypted since they hold binary (uuid) elements)
                 if ($encryptVersion >= 4) {
-                    $iter["comments"] = base64_decode($iter["comments"]);
+                    $iter["comments"] = base64_decode((string) $iter["comments"]);
                 }
-                $trans_comments = preg_replace($patterns, $replace, trim($iter["comments"]));
+                $trans_comments = preg_replace($patterns, $replace, trim((string) $iter["comments"]));
             }
 
             //Alter Checksum value records only display here

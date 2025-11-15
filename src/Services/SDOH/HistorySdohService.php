@@ -277,16 +277,8 @@ class HistorySdohService extends BaseService
         ];
     }
 
-    /**
-     * Updated concernsFromCurrentAssessment method with USCDI v3 compliant codes
-     */
-    public static function concernsFromCurrentAssessmentV3(int $pid): array
+    public static function concernsFromAssessmentV3(array $row): array
     {
-        // Pull latest assessment row
-        $row = sqlQuery(
-            "SELECT * FROM `form_history_sdoh` WHERE `pid` = ? ORDER BY COALESCE(`updated_at`,`created_at`) DESC LIMIT 1",
-            [$pid]
-        );
         if (empty($row)) {
             return [];
         }
@@ -357,11 +349,24 @@ class HistorySdohService extends BaseService
                 'assessment' => 'SDOH',
                 'encounter' => (string)$encId,
                 'extension' => base64_encode($site . $encId),
-                'sha_extension' => sha1($site . '|sdoh_concern|' . $pid . '|' . $col . '|' . $assessDt),
+                'sha_extension' => sha1($site . '|sdoh_concern|' . $row['pid'] . '|' . $col . '|' . $assessDt),
             ];
         }
 
         return $out;
+    }
+
+    /**
+     * Updated concernsFromCurrentAssessment method with USCDI v3 compliant codes
+     */
+    public static function concernsFromCurrentAssessmentV3(int $pid): array
+    {
+        // Pull latest assessment row
+        $row = sqlQuery(
+            "SELECT * FROM `form_history_sdoh` WHERE `pid` = ? ORDER BY COALESCE(`updated_at`,`created_at`) DESC LIMIT 1",
+            [$pid]
+        );
+        return self::concernsFromAssessmentV3($row);
     }
 
     /**
@@ -573,7 +578,7 @@ class HistorySdohService extends BaseService
                 'subject' => ['reference' => 'Patient/' . $pid],
             ];
             if ($when) {
-                $goal['startDate'] = substr($when, 0, 10);
+                $goal['startDate'] = substr((string) $when, 0, 10);
             }
 
             $target = [];
@@ -584,7 +589,7 @@ class HistorySdohService extends BaseService
                 $target['detailCodeableConcept'] = $spec['target'];
             }
             if ($due) {
-                $target['dueDate'] = substr($due, 0, 10);
+                $target['dueDate'] = substr((string) $due, 0, 10);
             }
 
             $goal['target'] = [$target];
@@ -709,7 +714,7 @@ class HistorySdohService extends BaseService
                 'authoredOn' => substr($when, 0, 10),
             ];
             if ($due) {
-                $sr['occurrenceDateTime'] = substr($due, 0, 10);
+                $sr['occurrenceDateTime'] = substr((string) $due, 0, 10);
             }
             $out[] = $sr;
         }
@@ -766,10 +771,10 @@ class HistorySdohService extends BaseService
                 $suffix[] = "reason: $reason";
             }
             if ($include_due && !empty($sr['occurrenceDateTime'])) {
-                $suffix[] = "due: " . substr($sr['occurrenceDateTime'], 0, 10);
+                $suffix[] = "due: " . substr((string) $sr['occurrenceDateTime'], 0, 10);
             }
             if ($include_when && !empty($sr['authoredOn'])) {
-                $suffix[] = "ordered: " . substr($sr['authoredOn'], 0, 10);
+                $suffix[] = "ordered: " . substr((string) $sr['authoredOn'], 0, 10);
             }
 
             $line = trim($bullet . ' ' . implode(' ', $parts));
@@ -881,10 +886,10 @@ class HistorySdohService extends BaseService
                 $suffix[] = "measure: $tMeasure";
             }
             if ($due !== '') {
-                $suffix[] = "due: " . substr($due, 0, 10);
+                $suffix[] = "due: " . substr((string) $due, 0, 10);
             }
             if ($start !== '') {
-                $suffix[] = "start: " . substr($start, 0, 10);
+                $suffix[] = "start: " . substr((string) $start, 0, 10);
             }
 
             $line = trim($bullet . ' ' . implode(' ', $parts));
@@ -1162,7 +1167,7 @@ class HistorySdohService extends BaseService
         if (empty($goals['goals'])) {
             return null;
         }
-        return json_decode($goals['goals'], true);
+        return json_decode((string) $goals['goals'], true);
     }
 
     private function ccText($cc): string

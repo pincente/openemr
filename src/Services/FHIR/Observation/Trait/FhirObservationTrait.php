@@ -11,8 +11,11 @@
 
 namespace OpenEMR\Services\FHIR\Observation\Trait;
 
+use InvalidArgumentException;
+use BadMethodCallException;
 use OpenEMR\Common\Uuid\UuidMapping;
 use OpenEMR\FHIR\R4\FHIRDomainResource\FHIRObservation;
+use OpenEMR\FHIR\R4\FHIRDomainResource\FHIRProvenance;
 use OpenEMR\FHIR\R4\FHIRElement\FHIRAnnotation;
 use OpenEMR\FHIR\R4\FHIRElement\FHIRCanonical;
 use OpenEMR\FHIR\R4\FHIRElement\FHIRCode;
@@ -58,12 +61,12 @@ trait FhirObservationTrait
 
     protected CodeTypesService $codeTypesService;
 
-    public function setCodeTypesService(CodeTypesService $service)
+    public function setCodeTypesService(CodeTypesService $service): void
     {
         $this->codeTypesService = $service;
     }
 
-    public function getCodeTypesService()
+    public function getCodeTypesService(): CodeTypesService
     {
         if (!isset($this->codeTypesService)) {
             $this->codeTypesService = new CodeTypesService();
@@ -83,11 +86,11 @@ trait FhirObservationTrait
      * @param bool $encode Indicates if the returned resource is encoded into a string. Defaults to True.
      * @return FHIRObservation|string the FHIR Resource. Returned format is defined using $encode parameter.
      */
-    public function parseObservationOpenEMRRecord($dataRecord = [], $encode = false): FHIRDomainResource|string
+    public function parseObservationOpenEMRRecord(array $dataRecord = [], bool $encode = false): FHIRDomainResource|string
     {
         // AI-generated implementation start
         if (empty($dataRecord)) {
-            throw new \InvalidArgumentException("Data record cannot be empty");
+            throw new InvalidArgumentException("Data record cannot be empty");
         }
 
         // Create new FHIR Observation
@@ -135,7 +138,7 @@ trait FhirObservationTrait
         $this->setOptionalFields($observation, $dataRecord);
 
         // Validate us-core-2 constraint
-        $this->validateUSCore2Constraint($observation, $dataRecord);
+        $this->validateUSCore2Constraint($observation);
 
         // Set Category (required, mustSupport, min 1), including optional screening-assessment slice
         $this->setObservationCategory($observation, $dataRecord);
@@ -203,7 +206,7 @@ trait FhirObservationTrait
         }
     }
 
-    protected function setObservationValueWithDetails(FhirObservation $observation, ?string $value, ?string $valueUnit, ?string $codeDescription, array $children = [])
+    protected function setObservationValueWithDetails(FhirObservation $observation, ?string $value, ?string $valueUnit, ?string $codeDescription, array $children = []): void
     {
         $valueType = "string";
         if (is_string($value) && !empty($codeDescription) && str_contains($value, ':')) {
@@ -282,7 +285,8 @@ trait FhirObservationTrait
         $observation->addCategory($initialCategory);
 
         // Optional screening-assessment category slice if we have a questionnaire category (mustSupport, 0..1)
-        if (!empty($dataRecord['screening_category_code'])) {
+        // make sure we don't duplicate the category
+        if (!empty($dataRecord['screening_category_code']) && $dataRecord['screening_category_code'] !== $catCoding->getCode()->getValue()) {
             if (in_array($dataRecord['screening_category_code'], self::US_CORE_CODESYSTEM_OBSERVATION_CATEGORY)) {
                 $systemUri = self::US_CORE_CODESYSTEM_OBSERVATION_CATEGORY_URI;
             }
@@ -309,7 +313,7 @@ trait FhirObservationTrait
     protected function setObservationCode(FHIRObservation $observation, array $dataRecord): void
     {
         if (empty($dataRecord['code'])) {
-            throw new \InvalidArgumentException("Code is required for observation");
+            throw new InvalidArgumentException("Code is required for observation");
         }
 
         $codeDescription = $this->getCodeTypesService()->lookup_code_description($dataRecord['code']);
@@ -336,7 +340,7 @@ trait FhirObservationTrait
     protected function setObservationSubject(FHIRObservation $observation, array $dataRecord): void
     {
         if (empty($dataRecord['puuid'])) {
-            throw new \InvalidArgumentException("Patient UUID (puuid) is required for observation subject");
+            throw new InvalidArgumentException("Patient UUID (puuid) is required for observation subject");
         }
 
         $subject = new FHIRReference();
@@ -387,6 +391,8 @@ trait FhirObservationTrait
             } else {
                 $observation->setEffectiveDateTime($effectiveDateTime);
             }
+        } else {
+            $observation->setEffectiveDateTime(UtilsService::createDataMissingExtension());
         }
     }
 
@@ -429,7 +435,7 @@ trait FhirObservationTrait
                     }
                 }
                 $comp->setValueQuantity($valueQuantity);
-            } else if (!empty($component['value_code_description']) && str_contains($component['value'], ':')) {
+            } else if (!empty($component['value_code_description']) && str_contains((string) $component['value'], ':')) {
                 $parsedCode = $this->getCodeTypesService()->parseCode($component['value']);
                 $code = $parsedCode['code'];
                 $comp->setValueCodeableConcept(UtilsService::createCodeableConcept([
@@ -452,7 +458,8 @@ trait FhirObservationTrait
         $value = $dataRecord['value'] ?? null;
         $valueUnit = $dataRecord['value_unit'] ?? null;
         $codeDescription = $dataRecord['value_code_description'] ?? null;
-        $children = $dataRecord['sub_observations'] ?? [];
+        // if no sub_observations, or components, we treat as a single value observation
+        $children = $dataRecord['sub_observations'] ?? $dataRecord['components'] ?? [];
         $this->setObservationValueWithDetails($observation, $value, $valueUnit, $codeDescription, $children);
     }
 
@@ -488,9 +495,19 @@ trait FhirObservationTrait
 //        }
 
         if (!empty($dataRecord['parent_observation_uuid'])) {
-            $parentRef = new FHIRReference();
-            $parentRef->setReference(new FHIRString('Observation/' . $dataRecord['parent_observation_uuid']));
-            $observation->addDerivedFrom($parentRef);
+            // an observation could potentially have many parent observations if for example the observation
+            // is a calculated observation
+            if (is_array($dataRecord['parent_observation_uuid'])) {
+                foreach ($dataRecord['parent_observation_uuid'] as $uuid) {
+                    $parentRef = new FHIRReference();
+                    $parentRef->setReference(new FHIRString('Observation/' . $uuid));
+                    $observation->addDerivedFrom($parentRef);
+                }
+            } else {
+                $parentRef = new FHIRReference();
+                $parentRef->setReference(new FHIRString('Observation/' . $dataRecord['parent_observation_uuid']));
+                $observation->addDerivedFrom($parentRef);
+            }
         }
     }
 
@@ -515,21 +532,21 @@ trait FhirObservationTrait
 
         // Set interpretation
         // TODO: @adunsulag if we support interpretation codes, we can add them here
-//        if (!empty($dataRecord['interpretation'])) {
-//            $interpretation = new FHIRCodeableConcept();
-//            $interpCoding = new FHIRCoding();
-//            $interpCoding->setSystem($dataRecord['interpretation_system'] ?? 'http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation');
-//            $interpCoding->setCode($dataRecord['interpretation']);
-//            $interpCoding->setDisplay($dataRecord['interpretation_display'] ?? '');
-//            $interpretation->addCoding($interpCoding);
-//            $observation->addInterpretation($interpretation);
-//        }
+        if (!empty($dataRecord['interpretation'])) {
+            $interpretation = new FHIRCodeableConcept();
+            $interpCoding = new FHIRCoding();
+            $interpCoding->setSystem($dataRecord['interpretation_system'] ?? 'http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation');
+            $interpCoding->setCode($dataRecord['interpretation']);
+            $interpCoding->setDisplay($dataRecord['interpretation_display'] ?? '');
+            $interpretation->addCoding($interpCoding);
+            $observation->addInterpretation($interpretation);
+        }
     }
 
     /**
      * Validate US Core constraint us-core-2
      */
-    protected function validateUSCore2Constraint(FHIRObservation $observation, array $dataRecord): void
+    protected function validateUSCore2Constraint(FHIRObservation $observation): void
     {
         $hasComponent = !empty($observation->getComponent());
         $hasMember = !empty($observation->getHasMember());
@@ -540,7 +557,7 @@ trait FhirObservationTrait
 
         // If no component and no hasMember, must have value or dataAbsentReason
         if (!$hasComponent && !$hasMember && !$hasValue && !$hasDataAbsentReason) {
-            throw new \InvalidArgumentException('Either value[x] or dataAbsentReason must be present when no hasMember exists (us-core-2 constraint)');
+            throw new InvalidArgumentException('Either value[x] or dataAbsentReason must be present when no hasMember exists (us-core-2 constraint)');
         }
     }
 
@@ -550,7 +567,7 @@ trait FhirObservationTrait
     protected function getValidStatus($status)
     {
         $statii = self::OBSERVATION_VALID_STATII;
-        if (array_search($status, $statii) !== false) {
+        if (in_array($status, $statii) !== false) {
             return $status;
         }
         return "unknown";
@@ -586,7 +603,7 @@ trait FhirObservationTrait
         return $this->fhirProvenanceService;
     }
 
-    public function setProvenanceService(FhirProvenanceService $service)
+    public function setProvenanceService(FhirProvenanceService $service): void
     {
         $this->fhirProvenanceService = $service;
     }
@@ -596,12 +613,12 @@ trait FhirObservationTrait
      *
      * @param FHIRDomainResource $dataRecord The source OpenEMR data record
      * @param bool $encode Indicates if the returned resource is encoded into a string. Defaults to True.
-     * @return FhirProvenanceService|string the FHIR Resource. Returned format is defined using $encode parameter.
+     * @return FhirProvenanceService|string|null the FHIR Resource. Returned format is defined using $encode parameter.
      */
-    public function createProvenanceResource($dataRecord, $encode = false)
+    public function createProvenanceResource($dataRecord, $encode = false): FHIRProvenance|string|null
     {
         if (!($dataRecord instanceof FHIRObservation)) {
-            throw new \BadMethodCallException("Data record should be correct instance class");
+            throw new BadMethodCallException("Data record should be correct instance class");
         }
         $fhirProvenanceService = $this->getProvenanceService();
         $performer = null;
@@ -623,7 +640,7 @@ trait FhirObservationTrait
     }
 
 
-    protected function getUuidMappings($uuid)
+    protected function getUuidMappings($uuid): array
     {
         $mappedRecords = UuidMapping::getMappedRecordsForTableUUID($uuid);
         $codeMappings = [];
@@ -644,7 +661,7 @@ trait FhirObservationTrait
     protected function getCodeFromResourcePath($resourcePath)
     {
         $query_vars = [];
-        parse_str($resourcePath, $query_vars);
+        parse_str((string) $resourcePath, $query_vars);
         return $query_vars['code'] ?? null;
     }
 }

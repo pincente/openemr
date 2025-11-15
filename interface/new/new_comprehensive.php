@@ -37,7 +37,7 @@ $searchcolor = empty($GLOBALS['layout_search_color']) ?
   'var(--yellow)' : $GLOBALS['layout_search_color'];
 
 $WITH_SEARCH = ($GLOBALS['full_new_patient_form'] == '1' || $GLOBALS['full_new_patient_form'] == '2' );
-$SHORT_FORM  = ($GLOBALS['full_new_patient_form'] == '2' || $GLOBALS['full_new_patient_form'] == '3' || $GLOBALS['full_new_patient_form'] == '4');
+$SHORT_FORM  = (in_array($GLOBALS['full_new_patient_form'], ['2', '3', '4']));
 
 $grparr = [];
 getLayoutProperties('DEM', $grparr, '*');
@@ -335,7 +335,7 @@ $lres = getLayoutRes();
 
 while ($lrow = sqlFetchArray($lres)) {
     $field_id  = $lrow['field_id'];
-    if (str_starts_with($field_id, 'em_')) {
+    if (str_starts_with((string) $field_id, 'em_')) {
         continue;
     }
 
@@ -428,7 +428,7 @@ $constraints = LBF_Validation::generate_validate_constraints("DEM");
                     function end_group(): void
                     {
                         global $last_group, $SHORT_FORM;
-                        if (strlen($last_group) > 0) {
+                        if (strlen((string) $last_group) > 0) {
                             end_row();
                             echo "</div>\n"; // end BS container
                             if (!$SHORT_FORM) {
@@ -457,8 +457,8 @@ $constraints = LBF_Validation::generate_validate_constraints("DEM");
                         // Accumulate action conditions into a JSON expression for the browser side.
                         accumActionConditions($frow, $condition_str);
 
-                        if (str_starts_with($field_id, 'em_')) {
-                            $tmp = substr($field_id, 3);
+                        if (str_starts_with((string) $field_id, 'em_')) {
+                            $tmp = substr((string) $field_id, 3);
                             if (isset($result2[$tmp])) {
                                 $currvalue = $result2[$tmp];
                             }
@@ -469,7 +469,7 @@ $constraints = LBF_Validation::generate_validate_constraints("DEM");
                         }
 
                         // Handle a data category (group) change.
-                        if (strcmp($this_group, $last_group) != 0) {
+                        if (strcmp((string) $this_group, (string) $last_group) != 0) {
                             if (!$SHORT_FORM) {
                                 end_group();
                                 $group_seq++;    // ID for DIV tags
@@ -494,7 +494,7 @@ $constraints = LBF_Validation::generate_validate_constraints("DEM");
                                         <div class="container-xl card-body">
                                 HTML;
                                 $display_style = 'none';
-                            } elseif (strlen($last_group) == 0) {
+                            } elseif (strlen((string) $last_group) == 0) {
                                 echo " <div class='container-xl'>\n";
                             }
                             $CPR = empty($grparr[$this_group]['grp_columns']) ? $TOPCPR : $grparr[$this_group]['grp_columns'];
@@ -561,9 +561,7 @@ $constraints = LBF_Validation::generate_validate_constraints("DEM");
                         // set flag so we don't bring in session pid data for a new pt form
                         $frow['blank_form'] = false;
                         if (
-                            $frow['data_type'] == "52"
-                            || $frow['data_type'] == "53"
-                            || $frow['data_type'] == "54"
+                            in_array($frow['data_type'], ["52", "53", "54"])
                         ) {
                             $frow['blank_form'] = true;
                         }
@@ -617,7 +615,7 @@ $constraints = LBF_Validation::generate_validate_constraints("DEM");
                                   <?php
                                     foreach ($insurancei as $iid => $iname) {
                                         echo "<option value='" . attr($iid) . "'";
-                                        if (!empty($result3["provider"]) && (strtolower($iid) == strtolower($result3["provider"]))) {
+                                        if (!empty($result3["provider"]) && (strtolower((string) $iid) == strtolower((string) $result3["provider"]))) {
                                             echo " selected";
                                         }
                                         echo ">" . text($iname) . "</option>\n";
@@ -868,7 +866,7 @@ $(function () {
             "ORDER BY group_id, seq");
         while ($mfrow = sqlFetchArray($mfres)) {
             $field_id  = $mfrow['field_id'];
-            if (str_starts_with($field_id, 'em_')) {
+            if (str_starts_with((string) $field_id, 'em_')) {
                 continue;
             }
 
@@ -911,7 +909,7 @@ $(function () {
 $lres = getLayoutRes();
 while ($lrow = sqlFetchArray($lres)) {
     $field_id  = $lrow['field_id'];
-    if (str_starts_with($field_id, 'em_')) {
+    if (str_starts_with((string) $field_id, 'em_')) {
         continue;
     }
 

@@ -481,7 +481,7 @@ class Savant3 implements \Stringable
      */
     public function setEscape()
     {
-        $this->__config ['escape'] = (array) @func_get_args();
+        $this->__config ['escape'] = @func_get_args();
     }
 
     /**
@@ -507,7 +507,7 @@ class Savant3 implements \Stringable
      */
     public function addEscape()
     {
-        $args = (array) @func_get_args();
+        $args = @func_get_args();
         $this->__config ['escape'] = array_merge($this->__config ['escape'], $args);
     }
 
@@ -628,10 +628,7 @@ class Savant3 implements \Stringable
             echo $this->escape($value);
         } else {
             $args = func_get_args();
-            echo call_user_func_array([
-                    $this,
-                    'escape'
-            ], $args);
+            echo call_user_func_array($this->escape(...), $args);
         }
     }
 
@@ -712,7 +709,7 @@ class Savant3 implements \Stringable
         // loop through the path directories
         foreach ($path as $dir) {
             // no surrounding spaces allowed!
-            $dir = trim($dir);
+            $dir = trim((string) $dir);
 
             // add trailing separators as needed
             if (strpos($dir, '://') && !str_ends_with($dir, '/')) {
@@ -753,7 +750,7 @@ class Savant3 implements \Stringable
             $fullname = $path . $file;
 
             // is the path based on a stream?
-            if (!str_contains($path, '://')) {
+            if (!str_contains((string) $path, '://')) {
                 // not a stream, so do a realpath() to avoid
                 // directory traversal attempts on the local file
                 // system. Suggested by Ian Eure, initially
@@ -767,7 +764,7 @@ class Savant3 implements \Stringable
             // that the realpath() results in a directory registered
             // with Savant so that non-registered directores are not
             // accessible via directory traversal attempts.
-            if (file_exists($fullname) && is_readable($fullname) && str_starts_with($fullname, $path)) {
+            if (file_exists($fullname) && is_readable($fullname) && str_starts_with($fullname, (string) $path)) {
                 return $fullname;
             }
         }
@@ -1091,7 +1088,7 @@ class Savant3 implements \Stringable
      */
     public function setFilters()
     {
-        $this->__config ['filters'] = (array) @func_get_args();
+        $this->__config ['filters'] = @func_get_args();
     }
 
     /**
@@ -1110,7 +1107,7 @@ class Savant3 implements \Stringable
     {
         // add the new filters to the static config variable
         // via the reference
-        foreach ((array) @func_get_args() as $callback) {
+        foreach (@func_get_args() as $callback) {
             $this->__config ['filters'] [] = $callback;
         }
     }

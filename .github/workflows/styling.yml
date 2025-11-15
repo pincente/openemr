@@ -13,6 +13,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
 
   php_styling:
@@ -61,7 +65,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v5
     - name: Install npm package
-      uses: actions/setup-node@v5
+      uses: actions/setup-node@v6
       with:
         node-version: ${{ matrix.node-version }}
     - name: Get NPM Cache Directory
@@ -95,7 +99,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v5
     - name: Install npm package
-      uses: actions/setup-node@v5
+      uses: actions/setup-node@v6
       with:
         node-version: ${{ matrix.node-version }}
     - name: Get NPM Cache Directory

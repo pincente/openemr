@@ -25,9 +25,9 @@ if (!CsrfUtils::verifyCsrfToken($_POST["csrf_token_form"])) {
 //  $table is the sql table (or form name if LBF)
 //  $name identifies the desired data item
 //  $title is used as the title of the graph
-$table = trim($_POST['table']);
-$name = trim($_POST['name']);
-$title = trim($_POST['title']);
+$table = trim((string) $_POST['table']);
+$name = trim((string) $_POST['name']);
+$title = trim((string) $_POST['title']);
 
 $is_lbf = str_starts_with($table, 'LBF');
 
@@ -91,7 +91,7 @@ function graphsGetValues($name)
         // Collect the pertinent info and ranges
         //  (Note am skipping values of zero, this could be made to be
         //   optional in the future when using lab values)
-        $values = SqlStatement("SELECT " .
+        $values = sqlStatement("SELECT " .
             escape_sql_column_name($name, [$table]) . ", " .
         "date " .
         "FROM " . escape_table_name($table) . " " .

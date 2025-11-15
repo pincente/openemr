@@ -39,23 +39,31 @@ class UuidRegistry
     const UUID_MAX_BATCH_COUNT = 1000;
     const UUID_TABLE_DEFINITIONS = [
 
+        'care_teams' => ['table_name' => 'care_teams'],
         'ccda' => ['table_name' => 'ccda'],
         'documents' => ['table_name' => 'documents'],
         'drugs' => ['table_name' => 'drugs', 'table_id' => 'drug_id'],
+        'drug_sales' => ['table_name' => 'drug_sales', 'table_id' => 'sale_id'],
+        'employer_data' => ['table_name' => 'employer_data'],
         'facility' => ['table_name' => 'facility'],
         'facility_user_ids' => ['table_name' => 'facility_user_ids', 'table_vertical' => ['uid', 'facility_id']],
         'form_clinical_notes' => ['table_name' => 'form_clinical_notes'],
         'form_encounter' => ['table_name' => 'form_encounter'],
         'form_vitals' => ['table_name' => 'form_vitals'],
+        'form_vitals_calculation' => ['table_name' => 'form_vitals_calculation'],
         'form_observation' => ['table_name' => 'form_observation'],
         'history_data' => ['table_name' => 'history_data'],
+        'issue_encounter' => ['table_name' => 'issue_encounter'],
         'immunizations' => ['table_name' => 'immunizations'],
         'insurance_companies' => ['table_name' => 'insurance_companies'],
         'insurance_data' => ['table_name' => 'insurance_data'],
         'lists' => ['table_name' => 'lists'],
         'openemr_postcalendar_events' => ['table_name' => 'openemr_postcalendar_events', 'table_id' => 'pc_eid'],
+        'patient_care_experience_preferences' => ['table_name' => 'patient_care_experience_preferences'],
         'patient_data' => ['table_name' => 'patient_data'],
         'patient_history' => ['table_name' => 'patient_history'],
+        'patient_treatment_intervention_preferences' => ['table_name' => 'patient_treatment_intervention_preferences'],
+        'person' => ['table_name' => 'person'],
         'prescriptions' => ['table_name' => 'prescriptions'],
         'procedure_order' => ['table_name' => 'procedure_order', 'table_id' => 'procedure_order_id'],
         'procedure_providers' => ['table_name' => 'procedure_providers', 'table_id' => 'ppid'],
@@ -64,7 +72,6 @@ class UuidRegistry
         'procedure_specimen' => ['table_name' => 'procedure_specimen', 'table_id' => 'procedure_specimen_id'],
         'questionnaire_repository' => ['table_name' => 'questionnaire_repository'],
         'questionnaire_response' => ['table_name' => 'questionnaire_response'],
-        'patient_related_persons' => ['table_name' => 'patient_related_persons', 'table_id' => 'pid'],
         'form_history_sdoh' => ['table_name' => 'form_history_sdoh'],
         'users' => ['table_name' => 'users']
     ];
@@ -136,7 +143,7 @@ class UuidRegistry
         self::appendPopulateLog('uuid_registry', $mappedRegistryUuidCounter, $logEntryComment);
 
         if (!empty($logEntryComment)) {
-            $logEntryComment = rtrim($logEntryComment, ', ');
+            $logEntryComment = rtrim((string) $logEntryComment, ', ');
         }
 
         // log it

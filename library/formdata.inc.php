@@ -106,7 +106,7 @@ function escape_sql_column_name($s, $tables, $long = false, $throwException = fa
     if (is_array($s)) {
         $multiple_columns = [];
         foreach ($s as $column) {
-            $multiple_columns[] = escape_sql_column_name(trim($column), $tables);
+            $multiple_columns[] = escape_sql_column_name(trim((string) $column), $tables);
         }
         return implode(", ", $multiple_columns);
     }
@@ -234,7 +234,7 @@ function escape_identifier($s, $whitelist_items, $die_if_no_match = false, $case
                 // Still no match
                 if ($die_if_no_match) {
                     // No match and $die_if_no_match is set, so die() and send error messages to screen and log
-                    error_Log("ERROR: OpenEMR SQL Escaping ERROR of the following string: " . errorLogEscape($s), 0);
+                    error_log("ERROR: OpenEMR SQL Escaping ERROR of the following string: " . errorLogEscape($s), 0);
                     die("<br /><span style='color:red;font-weight:bold;'>" . xlt("There was an OpenEMR SQL Escaping ERROR of the following string") . " " . text($s) . "</span><br />");
                 } else if ($throw_exception_if_no_match) {
                     throw new \OpenEMR\Common\Database\SqlQueryException("", "ERROR: OpenEMR SQL Escaping ERROR of the following string: " . errorLogEscape($s));
@@ -250,7 +250,7 @@ function escape_identifier($s, $whitelist_items, $die_if_no_match = false, $case
         if ($die_if_no_match) {
             if (preg_match('/[^' . $whitelist_items . ']/', $s)) {
                 // Contains illegal character and $die_if_no_match is set, so die() and send error messages to screen and log
-                error_Log("ERROR: OpenEMR SQL Escaping ERROR of the following string: " . errorLogEscape($s), 0);
+                error_log("ERROR: OpenEMR SQL Escaping ERROR of the following string: " . errorLogEscape($s), 0);
                 die("<br /><span style='color:red;font-weight:bold;'>" . xlt("There was an OpenEMR SQL Escaping ERROR of the following string") . " " . text($s) . "</span><br />");
             } else if ($throw_exception_if_no_match) {
                 throw new \OpenEMR\Common\Database\SqlQueryException("", "ERROR: OpenEMR SQL Escaping ERROR of the following string: " . errorLogEscape($s));

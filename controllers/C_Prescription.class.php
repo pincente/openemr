@@ -16,6 +16,7 @@
 
 require_once($GLOBALS['fileroot'] . "/library/registry.inc.php");
 require_once($GLOBALS['fileroot'] . "/library/amc.php");
+require_once($GLOBALS['fileroot'] . "/library/options.inc.php");
 
 use OpenEMR\Common\Csrf\CsrfUtils;
 use OpenEMR\Common\Forms\FormActionBarSettings;
@@ -24,6 +25,8 @@ use OpenEMR\Rx\RxList;
 use PHPMailer\PHPMailer\PHPMailer;
 use OpenEMR\Common\Database\QueryUtils;
 use OpenEMR\Common\Twig\TwigContainer;
+use OpenEMR\Services\CodeTypesService;
+use OpenEMR\Services\PatientIssuesService;
 
 class C_Prescription extends Controller
 {
@@ -32,7 +35,19 @@ class C_Prescription extends Controller
     public $is_faxing = false;
     public $is_print_to_fax = false;
     public $RxList;
+    /**
+     * @var Prescription[]
+     */
     public $prescriptions;
+    public CodeTypesService $codeTypesService;
+
+    public function getCodeTypesService()
+    {
+        if (!isset($this->codeTypesService)) {
+            $this->codeTypesService = new CodeTypesService();
+        }
+        return $this->codeTypesService;
+    }
 
     function __construct(public $template_mod = "general")
     {
@@ -40,7 +55,7 @@ class C_Prescription extends Controller
         $this->assign("TOP_ACTION", $GLOBALS['webroot'] . "/controller.php?" . "prescription" . "&");
         $this->assign("STYLE", $GLOBALS['style']);
         $this->assign("WEIGHT_LOSS_CLINIC", $GLOBALS['weight_loss_clinic']);
-        $this->assign("SIMPLIFIED_PRESCRIPTIONS", $GLOBALS['simplified_prescriptions']);
+        $this->assign("SIMPLIFIED_PRESCRIPTIONS", $GLOBALS['simplified_prescriptions'] === '1');
         $this->pconfig = $GLOBALS['oer_config']['prescriptions'];
         $this->RxList = new RxList();
         // test if rxnorm available for lookups.
@@ -92,13 +107,17 @@ class C_Prescription extends Controller
                     js_escape($row['drug_code'])  . "]";    //  11 rxnorm drug code
             }
 
+            $this->assign("dispenseEnabled", true);
+            $this->assign("defaultPharmacySupplyType", "FF");
             $this->assign("DRUG_ARRAY_VALUES", $drug_array_values);
             $this->assign("DRUG_ARRAY_OUTPUT", $drug_array_output);
             $this->assign("DRUG_ATTRIBUTES", $drug_attributes);
+
+            // add in the pharmacy dispense type
         }
     }
 
-    function default_action()
+    function default_action(): void
     {
         $prescription = $this->prescriptions[0];
         $this->assign("prescription", $prescription);
@@ -127,12 +146,24 @@ class C_Prescription extends Controller
             $this->prescriptions[0]->set_patient_id($patient_id);
         }
 
+        $urlCodes = $this->getCodeTypesService()->collectCodeTypes("diagnosis", "csv");
+        $url = $GLOBALS['webroot'] . '/interface/patient_file/encounter/select_codes.php?codetype=' . urlencode((string) $urlCodes);
+        $this->assign('diagnosisCodes', $this->getDiagnosisCodesList($this->prescriptions[0]));
+        $this->assign("addCodeUrl", $url);
+
         $this->assign("GBL_CURRENCY_SYMBOL", $GLOBALS['gbl_currency_symbol']);
 
         // If quantity to dispense is not already set from a POST, set its
         // default value.
         if (! $this->getTemplateVars('DISP_QUANTITY')) {
             $this->assign('DISP_QUANTITY', $this->prescriptions[0]->quantity);
+        }
+        $defaultEncounterId = $this->prescriptions[0]->get_encounter() ?? $_SESSION['encounter'] ?? '';
+        $this->assign("defaultEncounterId", $defaultEncounterId);
+
+        // if we are no a prescription with a drug id, disable the dispense button
+        if (empty($this->prescriptions[0]->get_drug_id())) {
+            $this->assign("dispenseEnabled", false);
         }
 
         $this->default_action();
@@ -164,7 +195,7 @@ class C_Prescription extends Controller
                 $medList = sqlStatement("SELECT drug FROM prescriptions WHERE active = 1 AND patient_id = ?", [$pid]);
                 $nameList = [];
                 while ($name = sqlFetchArray($medList)) {
-                    $drug = explode(" ", $name['drug']);
+                    $drug = explode(" ", (string) $name['drug']);
                     $rXn = sqlQuery("SELECT `rxcui` FROM `" . mitigateSqlTableUpperCase('RXNCONSO') . "` WHERE `str` LIKE ?", ["%" . $drug[0] . "%"]);
                     $nameList[] = $rXn['rxcui'];
                 }
@@ -177,7 +208,7 @@ class C_Prescription extends Controller
                     // Unable to urlencode the $rxcui, since this breaks the + items on call to rxnav.nlm.nih.gov; so need to include it in the path
                     $response = oeHttp::get('https://rxnav.nlm.nih.gov/REST/interaction/list.json?rxcuis=' . $rxcui_list);
                     $data = $response->body();
-                    $json = json_decode($data, true);
+                    $json = json_decode((string) $data, true);
                     if (!empty($json['fullInteractionTypeGroup'][0]['fullInteractionType'])) {
                         foreach ($json['fullInteractionTypeGroup'][0]['fullInteractionType'] as $item) {
                             $interaction .= '<div class="alert alert-danger">';
@@ -294,18 +325,6 @@ class C_Prescription extends Controller
 
         $this->assign("GBL_CURRENCY_SYMBOL", $GLOBALS['gbl_currency_symbol']);
 
-        // If the "Prescribe and Dispense" button was clicked, then
-        // redisplay as in edit_action() but also replicate the fee and
-        // include a piece of javascript to call dispense().
-        //
-        if (!empty($_POST['disp_button'])) {
-            $this->assign("DISP_QUANTITY", $_POST['disp_quantity']);
-            $this->assign("DISP_FEE", $_POST['disp_fee']);
-            $this->assign("ENDING_JAVASCRIPT", "dispense();");
-            $this->_state = false;
-            return $this->edit_action($this->prescriptions[0]->id);
-        }
-
     // Set the AMC reporting flag (to record percentage of prescriptions that
     // are set as e-prescriptions)
         if (!(empty($_POST['escribe_flag']))) {
@@ -406,7 +425,7 @@ class C_Prescription extends Controller
         $pdf->ezText('');
         $pdf->line($pdf->ez['leftMargin'], $pdf->y, $pdf->ez['pageWidth'] - $pdf->ez['rightMargin'], $pdf->y);
         $pdf->ezText('<b>' . xl('Medical Record #') . '</b>', 6);
-        $pdf->ezText(str_pad($p->patient->get_pubpid(), 10, "0", STR_PAD_LEFT), 10);
+        $pdf->ezText(str_pad((string) $p->patient->get_pubpid(), 10, "0", STR_PAD_LEFT), 10);
         $pdf->ezColumnsStop();
         if ($my_y < $pdf->y) {
             $pdf->ezSetY($my_y);
@@ -490,7 +509,7 @@ class C_Prescription extends Controller
         echo ("<tr>\n");
         echo ("<td class='bordered'>\n");
         echo ('<b><span class="small">' . xl('Medical Record #') . '</span></b>' . '<br />');
-        echo (str_pad($p->patient->get_pubpid(), 10, "0", STR_PAD_LEFT));
+        echo (str_pad((string) $p->patient->get_pubpid(), 10, "0", STR_PAD_LEFT));
         echo ("</td>\n");
         echo ("</tr>\n");
         echo ("<tr>\n");
@@ -694,7 +713,7 @@ class C_Prescription extends Controller
         $d = $this->get_prescription_body_text($p);
         $patterns =  ['/\n/','/     /'];
         $replace =  ['<br />','&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'];
-        $d = preg_replace($patterns, $replace, $d);
+        $d = preg_replace($patterns, $replace, (string) $d);
         echo ("<div class='scriptdiv'>\n" . $d . "</div>\n");
     }
 
@@ -806,7 +825,7 @@ class C_Prescription extends Controller
         echo ($p->patient->date_of_birth );
         echo "\n";
         echo xl('Medical Record #');
-        echo (str_pad($p->patient->get_pubpid(), 10, "0", STR_PAD_LEFT));
+        echo (str_pad((string) $p->patient->get_pubpid(), 10, "0", STR_PAD_LEFT));
         echo "\n\n";
         echo xl('Prescriptions') . "\n";
     }
@@ -834,7 +853,7 @@ class C_Prescription extends Controller
         }
         ob_start();
 
-        $ids = preg_split('/::/', substr($idsGet, 1, strlen($idsGet) - 2), -1, PREG_SPLIT_NO_EMPTY);
+        $ids = preg_split('/::/', substr((string) $idsGet, 1, strlen((string) $idsGet) - 2), -1, PREG_SPLIT_NO_EMPTY);
 
         $on_this_page = 0;
         foreach ($ids as $id) {
@@ -850,7 +869,7 @@ class C_Prescription extends Controller
             }
 
             // we don't want any html in the plain text rendering
-            echo strip_tags($this->get_prescription_body_text($p));
+            echo strip_tags((string) $this->get_prescription_body_text($p));
         }
 
         $this->multiprintplain_footer();
@@ -875,7 +894,7 @@ class C_Prescription extends Controller
         $this->multiprintcss_preheader();
 
         $this->_state = false; // Added by Rod - see Controller.class.php
-        $ids = preg_split('/::/', substr($id, 1, strlen($id) - 2), -1, PREG_SPLIT_NO_EMPTY);
+        $ids = preg_split('/::/', substr((string) $id, 1, strlen((string) $id) - 2), -1, PREG_SPLIT_NO_EMPTY);
 
         $on_this_page = 0;
         foreach ($ids as $id) {
@@ -1020,7 +1039,7 @@ class C_Prescription extends Controller
     {
         $err = "Sent fax";
         //strip - ,(, ), and ws
-        $faxNum = preg_replace("/(-*)(\(*)(\)*)(\s*)/", "", $faxNum);
+        $faxNum = preg_replace("/(-*)(\(*)(\)*)(\s*)/", "", (string) $faxNum);
         //validate the number
 
         if (!empty($faxNum) && is_numeric($faxNum)) {
@@ -1048,7 +1067,7 @@ class C_Prescription extends Controller
                     $err .= " Failed to open file $fileName to write fax to";
                 }
 
-                if (fwrite($handle, $faxFile) === false) {
+                if (fwrite($handle, (string) $faxFile) === false) {
                     $err .= " Failed to write data to $fileName";
                 }
 
@@ -1081,7 +1100,7 @@ class C_Prescription extends Controller
 
         //print prescriptions body
         $this->_state = false; // Added by Rod - see Controller.class.php
-        $ids = preg_split('/::/', substr($id, 1, strlen($id) - 2), -1, PREG_SPLIT_NO_EMPTY);
+        $ids = preg_split('/::/', substr((string) $id, 1, strlen((string) $id) - 2), -1, PREG_SPLIT_NO_EMPTY);
         foreach ($ids as $id) {
             $p = new Prescription($id);
             // if ($print_header == true) {
@@ -1109,10 +1128,55 @@ class C_Prescription extends Controller
         ob_start();
         $this->multiprintcss_action($id);
         $html = ob_get_clean();
-        $ids = preg_split('/::/', substr($id, 1, strlen($id) - 2), -1, PREG_SPLIT_NO_EMPTY);
+        $ids = preg_split('/::/', substr((string) $id, 1, strlen((string) $id) - 2), -1, PREG_SPLIT_NO_EMPTY);
         if (!empty($ids)) {
             $prescription = new Prescription($ids[0]);
         }
         return [$html, $prescription->patient];
+    }
+
+    private function getDiagnosisCodesList(Prescription $prescription)
+    {
+        $codeTypesService = $this->getCodeTypesService();
+        $listsService = new PatientIssuesService();
+        $activeIssues = $listsService->getActiveIssues($prescription->get_patient_id());
+        $formattedCodes = [];
+        $diagnosis = $prescription->get_diagnosis();
+        $selectedCodes = !empty($diagnosis) ? explode(';', $prescription->get_diagnosis() ?? '') : [];
+        $selectedCodes = array_combine($selectedCodes, $selectedCodes);
+        $formattedCodesByCode = [];
+        if ($activeIssues->hasData()) {
+            foreach ($activeIssues->getData() as $issue) {
+                $codes = $issue['diagnosis'];
+                $issueCodes = !empty($codes) ? explode(';', (string) $codes) : [];
+                foreach ($issueCodes as $code) {
+                    // already exists in the list so we skip over it.
+                    if (isset($formattedCodesByCode[$code])) {
+                        continue;
+                    }
+                    $description = $codeTypesService->lookup_code_description($code);
+                    $formattedCodes[] = [
+                        'value' => $code,
+                        'text' => $description . ' (' . $code . ')',
+                        'selected' => isset($selectedCodes[$code])
+                    ];
+                    $formattedCodesByCode[$code] = true;
+                    // clear it out so we don't show duplicates
+                    if (isset($selectedCodes[$code])) {
+                        unset($selectedCodes[$code]);
+                    }
+                }
+            }
+        }
+        // add any remaining selected codes that were not in active issues, but do exist in the prescription
+        foreach ($selectedCodes as $code) {
+            $description = $codeTypesService->lookup_code_description($code);
+            $formattedCodes[] = [
+                'value' => $code,
+                'text' => $description . ' (' . $code . ')',
+                'selected' => true
+            ];
+        }
+        return $formattedCodes;
     }
 }

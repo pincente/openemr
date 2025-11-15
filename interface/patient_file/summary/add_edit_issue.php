@@ -26,6 +26,7 @@ use OpenEMR\Common\Csrf\CsrfUtils;
 use OpenEMR\Core\Header;
 use OpenEMR\MedicalDevice\MedicalDevice;
 use OpenEMR\Services\PatientIssuesService;
+use OpenEMR\Services\Utils\DateFormatterUtils;
 
 // TBD - Resolve functional issues if opener is included in Header
 ?>
@@ -134,7 +135,7 @@ function ActiveIssueCodeRecycleFn($thispid2, $ISSUE_TYPES2): void
 
     while ($issueCodesRow2 = sqlFetchArray($issueCodes2)) {
         if ($issueCodesRow2['diagnosis'] != "") {
-            $someCodes2 = explode(";", $issueCodesRow2['diagnosis']);
+            $someCodes2 = explode(";", (string) $issueCodesRow2['diagnosis']);
             $codeList2 = array_merge($codeList2, $someCodes2);
         }
     }
@@ -282,6 +283,7 @@ if (!empty($_POST['form_save'])) {
     // now populate medication
     if (isset($_POST['form_medication'])) {
         $issueRecord['medication'] = $_POST['form_medication'];
+        $issueRecord['medication']['medication_adherence_date_asserted'] = !empty($issueRecord['medication']['medication_adherence_date_asserted']) ? DateTimeToYYYYMMDDHHMMSS($issueRecord['medication']['medication_adherence_date_asserted']) : null;
     }
 
     $patientIssuesService = new PatientIssuesService();
@@ -309,11 +311,11 @@ if (!empty($_POST['form_save'])) {
 
     // If requested, link the issue to a specified encounter.
     if ($thisenc) {
-        $sql = "INSERT INTO issue_encounter(pid, list_id, encounter) VALUES (?, ?, ?)";
-        sqlStatement($sql, [$thispid, $issue, $thisenc]);
+        $patientIssuesService = new PatientIssuesService();
+        $patientIssuesService->linkIssueToEncounter($thispid, $thisenc, $issue, $_SESSION['authUserID']);
     }
 
-    $tmp_title = $ISSUE_TYPES[$text_type][2] . ": $form_begin " . substr($_POST['form_title'], 0, 40);
+    $tmp_title = $ISSUE_TYPES[$text_type][2] . ": $form_begin " . substr((string) $_POST['form_title'], 0, 40);
 
     // Close this window and redisplay the updated list of issues.
     //
@@ -408,18 +410,18 @@ function getCodeText($code)
         );
         while ($res = sqlFetchArray($qry)) {
             echo " opt = new Option(" .
-                js_escape(xl_list_label(trim($res['title']))) .
+                js_escape(xl_list_label(trim((string) $res['title']))) .
                 ", " .
-                js_escape(trim($res['option_id'])) .
+                js_escape(trim((string) $res['option_id'])) .
                 ", false, false);\n";
             echo " aopts[" . attr($i) . "][aopts[" . attr($i) . "].length] = opt\n";
             if ($res['codes']) {
-                $codes = explode(";", $res['codes']);
+                $codes = explode(";", (string) $res['codes']);
                 foreach ($codes as $code) {
                     $text = getCodeText($code);
                     echo " codeTexts.set(" . js_escape($code) . ", " . js_escape($text) . ");\n";
                 }
-                echo " opt.setAttribute('codes'," . js_escape(trim($res['codes'])) . ");\n";
+                echo " opt.setAttribute('codes'," . js_escape(trim((string) $res['codes'])) . ");\n";
             }
         }
 
@@ -478,6 +480,7 @@ function getCodeText($code)
             // reaction row should be displayed only for medication allergy.
             var alldisp = (index == <?php echo issueTypeIndex('allergy'); ?>) ? '' : 'none';
             var verificationdisp = (index == <?php echo issueTypeIndex('medical_problem'); ?>) ||
+                (index == <?php echo issueTypeIndex('health_concern'); ?>) ||
                 (index == <?php echo issueTypeIndex('allergy'); ?>) ? '' : 'none';
             document.getElementById('row_enddate').style.display = comdisp;
             // Note that by default all the issues will not show the active row
@@ -605,9 +608,9 @@ function getCodeText($code)
         <?php
         $url = '../encounter/select_codes.php?codetype=';
         if (!empty($irow['type']) && ($irow['type'] == 'medical_problem')) {
-            $url .= urlencode(collect_codetypes("medical_problem", "csv"));
+            $url .= urlencode((string) collect_codetypes("medical_problem", "csv"));
         } else {
-            $url .= urlencode(collect_codetypes("diagnosis", "csv"));
+            $url .= urlencode((string) collect_codetypes("diagnosis", "csv"));
             $tmp_csv = collect_codetypes("drug", "csv");
             $tmp_csv .= "," . collect_codetypes("clinical_term", "csv");
             $tmp = explode(",", $tmp_csv);
@@ -713,9 +716,9 @@ function getCodeText($code)
     function validate() {
         var f = document.forms[0];
         var begin_date_val = f.form_begin.value;
-        begin_date_val = begin_date_val ? DateToYYYYMMDD_js(begin_date_val) : begin_date_val;
+        begin_date_val = begin_date_val ? DateToYYYYMMDDHHMMSS_js(begin_date_val) : begin_date_val;
         var end_date_val = f.form_end.value;
-        end_date_val = end_date_val ? DateToYYYYMMDD_js(end_date_val) : end_date_val;
+        end_date_val = end_date_val ? DateToYYYYMMDDHHMMSS_js(end_date_val) : end_date_val;
         var begin_date = new Date(begin_date_val);
         var end_date = new Date(end_date_val);
 
@@ -775,7 +778,7 @@ function getCodeText($code)
                     $formdir = $vrow['formdir'];
                     $formid  = $vrow['form_id'];
                     $visitid = $vrow['encounter'];
-                    echo " <li><a href='#'>" . text(oeFormatShortDate(substr($vrow['date'], 0, 10))) . ' ' .
+                    echo " <li><a href='#'>" . text(oeFormatShortDate(substr((string) $vrow['date'], 0, 10))) . ' ' .
                         text($vrow['form_name']) . "</a></li>\n";
                     $tabcontents .= "<div class='tab' style='height:90%;width:98%;'>\n";
                     $tabcontents .= "<iframe frameborder='0' class='h-100 w-100' " .
@@ -847,11 +850,11 @@ function getCodeText($code)
                             </div>
                             <div class="form-group col-sm-12 col-md-3">
                                 <label for="form_begin"><?php echo xlt('Begin Date and Time'); ?>:</label>
-                                <input type='text' class='datepicker form-control' name='form_begin' id='form_begin' value='<?php echo attr(trim(oeFormatDateTime($irow['begdate'] ?? ''))) ?>' title='<?php echo xla('yyyy-mm-dd HH:MM date of onset, surgery or start of medication'); ?>' />
+                                <input type='text' class='datepicker form-control' name='form_begin' id='form_begin' value='<?php echo attr(trim(DateFormatterUtils::oeFormatDateTime($irow['begdate'] ?? ''))) ?>' title='<?php echo xla('yyyy-mm-dd HH:MM date of onset, surgery or start of medication'); ?>' />
                             </div>
                             <div class="form-group col-sm-12 col-md-3" id='row_enddate'>
                                 <label for="form_begin"><?php echo xlt('End Date and Time'); ?>:</label>
-                                <input type='text' class='datepicker form-control' placeholder="<?php echo xlt('leave blank if still active'); ?>" name='form_end' id='form_end' value='<?php echo attr(trim(oeFormatDateTime($irow['enddate'] ?? ''))) ?>' title='<?php echo xla('yyyy-mm-dd HH:MM date of recovery or end of medication'); ?>' />
+                                <input type='text' class='datepicker form-control' placeholder="<?php echo xlt('leave blank if still active'); ?>" name='form_end' id='form_end' value='<?php echo attr(trim(DateFormatterUtils::oeFormatDateTime($irow['enddate'] ?? ''))) ?>' title='<?php echo xla('yyyy-mm-dd HH:MM date of recovery or end of medication'); ?>' />
                             </div>
                         </div>
                         <div class="row">
@@ -913,7 +916,7 @@ function getCodeText($code)
                                         onchange="onCodeSelectionChange()">
                                     <?php
                                     if (!empty($irow['diagnosis'])) {
-                                        $codes = explode(";", $irow['diagnosis']);
+                                        $codes = explode(";", (string) $irow['diagnosis']);
                                         foreach ($codes as $code) {
                                             echo "<option value='" . attr($code) . "'>" . text(getCodeText($code)) . "</option>\n";
                                         }
@@ -946,7 +949,9 @@ function getCodeText($code)
                                 <div class="form-group col-sm-12 col-md-4" id='row_subtype'>
                                     <label for="form_subtype"><?php echo xlt('Classification Type'); ?>:</label>
                                     <?php
-                                    echo generate_select_list('form_subtype', 'issue_subtypes', ($irow['subtype'] ?? null), '', 'NA', '', '');
+                                    // health concerns uses the Observation_Types list which comes from the https://www.hl7.org/fhir/us/core/ValueSet-us-core-simple-observation-category.html
+                                    $subTypeListId = $irow['type'] == 'health_concern' ? 'Observation_Types' : 'issue_subtypes';
+                                    echo generate_select_list('form_subtype', $subTypeListId, ($irow['subtype'] ?? null), '', 'NA', '', '');
                                     ?>
                                     <div class="form-group" id='row_classification'>
                                         <label for="form_classification"><?php echo xlt('Classification'); ?>:</label>
@@ -999,6 +1004,33 @@ function getCodeText($code)
                                 </div>
                             </div>
                         </div>
+                        <?php if (!empty($irow['id']) && ($irow['type'] ?? '') == 'medication') : ?>
+                        <div class="row">
+                            <div class="col-12">
+                                <h5><?php echo xlt("Medication Adherence"); ?></h5>
+                            </div>
+                        </div>
+                        <div class="row">
+
+                            <div class="form-group col-sm-12 col-md-6">
+                                <label class="col-form-label" for="form_medication[medication_adherence_date_asserted]"><?php echo xlt('Date Asserted'); ?>:</label>
+                                <input type="text" class="form-control datepicker" name='form_medication[medication_adherence_date_asserted]' id='form_medication[medication_adherence_date_asserted]'
+                                       value="<?php echo attr(DateFormatterUtils::oeFormatDateTime($irow['medication']['medication_adherence_date_asserted'] ?? date("Y-m-d H:i:s"))); ?>" />
+                            </div>
+                            <div class="form-group col-sm-12 col-md-6">
+                                <label class="col-form-label" for="form_medication[medication_adherence]"><?php echo xlt('Current Adherence to Medication'); ?>:</label>
+                                <?php
+                                generate_form_field(['data_type' => 1, 'field_id' => 'medication[medication_adherence]', 'list_id' => 'medication_adherence'], $irow['medication']['medication_adherence'] ?? null);
+                                ?>
+                            </div>
+                            <div class="form-group col-sm-12 col-md-6">
+                                <label class="col-form-label" for="form_medication[medication_adherence_information_source]"><?php echo xlt('Information Source'); ?>:</label>
+                                <?php
+                                generate_form_field(['data_type' => 1, 'field_id' => 'medication[medication_adherence_information_source]', 'list_id' => 'medication_adherence_information_source'], $irow['medication']['medication_adherence_information_source'] ?? null);
+                                ?>
+                            </div>
+                        </div>
+                        <?php endif; ?>
                         <div class="row">
                             <div class="col d-flex justify-content-end">
                                 <button type="button" class="btn btn-text mr-3" data-toggle="collapse" data-target="#expanded_options" aria-expanded="false" aria-controls="expanded_options"><?php echo xlt("Show More Fields"); ?>&nbsp;<i class="fa fa-angles-down"></i></button>

@@ -19,7 +19,13 @@ use OpenEMR\Common\Logging\EventAuditLogger;
 use OpenEMR\Common\Uuid\UuidRegistry;
 use OpenEMR\Core\Header;
 use OpenEMR\Menu\PatientMenuRole;
+use OpenEMR\Common\Forms\Types\EncounterListOptionType;
 
+/**
+ * @var int $pid should come from globals, but to fix phpstan issues we are declaring it here
+ */
+// @phpstan-ignore nullCoalesce.variable
+$pid ??= $_SESSION['pid'] ?? null;
 
 if (isset($_GET['mode'])) {
     if (!CsrfUtils::verifyCsrfToken($_GET["csrf_token_form"])) {
@@ -59,34 +65,36 @@ if (isset($_GET['mode'])) {
             refusal_reason = ?,
             reason_code = ?,
             reason_description = ?,
-            ordering_provider = ?";
+            ordering_provider = ?,
+            encounter_id = ?";
         $sqlBindArray = [
-            trim($_GET['id']),
+            trim((string) $_GET['id']),
             UuidRegistry::isValidStringUUID($_GET['uuid']) ? UuidRegistry::uuidToBytes($_GET['uuid']) : null,
-            trim($_GET['administered_date']), trim($_GET['administered_date']),
+            trim((string) $_GET['administered_date']), trim((string) $_GET['administered_date']),
             trim($_GET['form_immunization_id'] ?? ''),
-            trim($_GET['cvx_code']),
-            trim($_GET['manufacturer']),
+            trim((string) $_GET['cvx_code']),
+            trim((string) $_GET['manufacturer']),
             trim($_GET['lot_number'] ?? ''),
-            trim($_GET['administered_by_id']), trim($_GET['administered_by_id']),
-            trim($_GET['administered_by']), trim($_GET['administered_by']),
-            trim($_GET['education_date']), trim($_GET['education_date']),
-            trim($_GET['vis_date']), trim($_GET['vis_date']),
-            trim($_GET['note']),
+            trim((string) $_GET['administered_by_id']), trim((string) $_GET['administered_by_id']),
+            trim((string) $_GET['administered_by']), trim((string) $_GET['administered_by']),
+            trim((string) $_GET['education_date']), trim((string) $_GET['education_date']),
+            trim((string) $_GET['vis_date']), trim((string) $_GET['vis_date']),
+            trim((string) $_GET['note']),
             $pid,
             $_SESSION['authUserID'],
             $_SESSION['authUserID'],
-            trim($_GET['immuniz_amt_adminstrd']),
-            trim($_GET['form_drug_units']),
-            trim($_GET['immuniz_exp_date']), trim($_GET['immuniz_exp_date']),
-            trim($_GET['immuniz_route']),
-            trim($_GET['immuniz_admin_ste']),
-            trim($_GET['immuniz_completion_status']),
-            trim($_GET['immunization_informationsource']),
-            trim($_GET['immunization_refusal_reason']),
-            trim($_GET['reason_code']),
+            trim((string) $_GET['immuniz_amt_adminstrd']),
+            trim((string) $_GET['form_drug_units']),
+            trim((string) $_GET['immuniz_exp_date']), trim((string) $_GET['immuniz_exp_date']),
+            trim((string) $_GET['immuniz_route']),
+            trim((string) $_GET['immuniz_admin_ste']),
+            trim((string) $_GET['immuniz_completion_status']),
+            trim((string) $_GET['immunization_informationsource']),
+            trim((string) $_GET['immunization_refusal_reason']),
+            trim((string) $_GET['reason_code']),
             trim($_GET['reason_description'] ?? ''),
-            trim($_GET['ordered_by_id'])
+            trim((string) $_GET['ordered_by_id']),
+            trim((string) $_GET['encounter_id'])
         ];
         $newid = sqlInsert($sql, $sqlBindArray);
         $administered_date = date('Y-m-d H:i');
@@ -169,6 +177,7 @@ if (isset($_GET['mode'])) {
         //set id for page
         $id = $_GET['id'];
 
+        $immunizationEncounter = $result['encounter_id'];
         $imm_obs_data = getImmunizationObservationResults();
     }
 }
@@ -519,6 +528,18 @@ tr.selected {
                         </select>
                     </div>
 
+                    <?php
+                    // need to add the encounter linkage using the TwigExtension function encounterSelectList
+                    ?>
+                    <div class="form-group mt-3">
+                        <label><?php echo xlt('Encounter'); ?></label>
+                        <?php
+                        $encounterType = new EncounterListOptionType($pid);
+                        echo $encounterType->render('encounter_id', $immunizationEncounter ?? '');
+                        ?>
+
+                        </div>
+                    </div>
                     <div class="row mt-3">
                         <div class="col-12 text-center">
                             <?php
@@ -533,7 +554,6 @@ tr.selected {
                             <?php } ?>
                         </div>
                     </div>
-
                     <div class="observation_results" style="display:none;">
                         <fieldset class="obs_res_head">
                             <legend><?php echo xlt('Observation Results'); ?></legend>

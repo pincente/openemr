@@ -23,10 +23,13 @@ use OpenEMR\FHIR\R4\FHIRElement\FHIRPeriod;
 use OpenEMR\FHIR\R4\FHIRElement\FHIRReference;
 use OpenEMR\FHIR\R4\FHIRResource\FHIRSpecimen\FHIRSpecimenCollection;
 use OpenEMR\FHIR\R4\FHIRResource\FHIRSpecimen\FHIRSpecimenContainer;
+use OpenEMR\Services\FHIR\Traits\BulkExportSupportAllOperationsTrait;
+use OpenEMR\Services\FHIR\Traits\FhirBulkExportDomainResourceTrait;
 use OpenEMR\Services\FHIR\Traits\FhirServiceBaseEmptyTrait;
 use OpenEMR\Services\ProcedureService;
 use OpenEMR\Services\Search\FhirSearchParameterDefinition;
 use OpenEMR\Services\Search\FhirSearchWhereClauseBuilder;
+use OpenEMR\Services\Search\ISearchField;
 use OpenEMR\Services\Search\SearchFieldException;
 use OpenEMR\Services\Search\SearchFieldType;
 use OpenEMR\Services\Search\ServiceField;
@@ -34,8 +37,11 @@ use OpenEMR\Services\Search\TokenSearchField;
 use OpenEMR\Validators\ProcessingResult;
 
 class FhirSpecimenService extends FhirServiceBase implements IPatientCompartmentResourceService, IResourceUSCIGProfileService
+    , IFhirExportableResourceService
 {
     use FhirServiceBaseEmptyTrait;
+    use BulkExportSupportAllOperationsTrait;
+    use FhirBulkExportDomainResourceTrait;
 
     const USCDI_PROFILE = 'http://hl7.org/fhir/us/core/StructureDefinition/us-core-specimen';
 
@@ -57,20 +63,20 @@ class FhirSpecimenService extends FhirServiceBase implements IPatientCompartment
     {
         return [
             'patient' => $this->getPatientContextSearchField(),
-            'identifier' => new FhirSearchParameterDefinition('identifier', SearchFieldType::TOKEN, ['specimen_identifier']),
-            'accession' => new FhirSearchParameterDefinition('accession', SearchFieldType::TOKEN, ['accession_identifier']),
-            'type' => new FhirSearchParameterDefinition('type', SearchFieldType::TOKEN, ['specimen_type_code']),
-            'collected' => new FhirSearchParameterDefinition('collected', SearchFieldType::DATETIME, ['collected_date']),
-            'status' => new FhirSearchParameterDefinition('status', SearchFieldType::TOKEN, ['deleted']),
-            '_id' => new FhirSearchParameterDefinition('_id', SearchFieldType::TOKEN, [new ServiceField('uuid', ServiceField::TYPE_UUID)]),
-            '_lastUpdated' => new FhirSearchParameterDefinition('_lastUpdated', SearchFieldType::DATETIME, ['updated_at'])
+            'identifier' => new FhirSearchParameterDefinition('identifier', SearchFieldType::TOKEN, ['ps.specimen_identifier']),
+            'accession' => new FhirSearchParameterDefinition('accession', SearchFieldType::TOKEN, ['ps.accession_identifier']),
+            'type' => new FhirSearchParameterDefinition('type', SearchFieldType::TOKEN, ['ps.specimen_type_code']),
+            'collected' => new FhirSearchParameterDefinition('collected', SearchFieldType::DATETIME, ['ps.collected_date']),
+            'status' => new FhirSearchParameterDefinition('status', SearchFieldType::TOKEN, ['ps.deleted']),
+            '_id' => new FhirSearchParameterDefinition('_id', SearchFieldType::TOKEN, [new ServiceField('ps.uuid', ServiceField::TYPE_UUID)]),
+            '_lastUpdated' => new FhirSearchParameterDefinition('_lastUpdated', SearchFieldType::DATETIME, ['ps.updated_at'])
         ];
     }
 
     /**
      * Searches for OpenEMR records using OpenEMR search parameters
      *
-     * @param array $openEMRSearchParameters OpenEMR search fields
+     * @param array<string, ISearchField> $openEMRSearchParameters OpenEMR search fields
      * @return ProcessingResult
      */
     protected function searchForOpenEMRRecords($openEMRSearchParameters): ProcessingResult
@@ -148,7 +154,7 @@ class FhirSpecimenService extends FhirServiceBase implements IPatientCompartment
      */
     private function searchSpecimens(array $searchParams): array
     {
-        $sql = "SELECT 
+        $sql = "SELECT
             ps.procedure_specimen_id,
             ps.uuid,
             ps.procedure_order_id,
@@ -376,11 +382,12 @@ class FhirSpecimenService extends FhirServiceBase implements IPatientCompartment
         }
 
         // Set container/volume if available
-        if (!empty($dataRecord['volume'])) {
+        if (!empty($dataRecord['volume']) && is_numeric($dataRecord['volume'])) {
             $container = new FHIRSpecimenContainer();
-
+            // FHIR requires an actual numeric value
+            $value = floatval($dataRecord['volume']);
             $capacity = UtilsService::createQuantity(
-                $dataRecord['volume'],
+                $value,
                 $dataRecord['volume_unit'] ?? 'mL',
                 $dataRecord['volume_unit'] ?? 'mL'
             );
@@ -494,7 +501,7 @@ class FhirSpecimenService extends FhirServiceBase implements IPatientCompartment
         return new FhirSearchParameterDefinition(
             'patient',
             SearchFieldType::REFERENCE,
-            [new ServiceField('puuid', ServiceField::TYPE_UUID)]
+            [new ServiceField('p.uuid', ServiceField::TYPE_UUID)]
         );
     }
 
